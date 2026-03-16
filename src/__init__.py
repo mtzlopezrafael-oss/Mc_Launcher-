@@ -1,0 +1,1 @@
+"""Minecraft launcher package root."""
