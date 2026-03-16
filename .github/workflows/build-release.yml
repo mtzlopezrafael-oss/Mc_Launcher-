@@ -1,7 +1,7 @@
-name: Build & Release Windows MSI
+name: Build & Release Windows Setup
 
 # ── Cuándo se ejecuta ──────────────────────────────────────────────────────
-# 1. Automáticamente al hacer push de un tag  v*  (ej: v3.0.1, v3.1.0)
+# 1. Automáticamente al hacer push de un tag  v*  (ej: v3.0.2, v3.1.0)
 # 2. Manualmente desde GitHub → Actions → "Run workflow"
 on:
   push:
@@ -13,8 +13,8 @@ permissions:
   contents: write      # Necesario para crear GitHub Releases y subir assets
 
 jobs:
-  build-msi:
-    name: Build MSI on Windows
+  build-setup:
+    name: Build Setup on Windows
     runs-on: windows-latest
 
     steps:
@@ -55,13 +55,10 @@ jobs:
           ICO_SIZES = [(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)]
 
           def make_default_icon(size=256):
-              '''Genera un icono verde con pico de minería si el PNG es inválido.'''
               img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
               d = ImageDraw.Draw(img)
-              # Fondo redondeado verde Minecraft
               d.rounded_rectangle([4, 4, size-4, size-4], radius=size//8,
                                    fill=(76, 153, 0, 255))
-              # Cuadrado blanco central (símbolo de bloque)
               m = size // 4
               d.rectangle([m, m, size-m, size-m], fill=(255, 255, 255, 200))
               return img
@@ -70,20 +67,17 @@ jobs:
               img = Image.open('assets/icon.png').convert('RGBA')
               w, h = img.size
               if w < 32 or h < 32:
-                  print(f'Icono demasiado pequeño ({w}x{h}), generando icono por defecto')
+                  print(f'Icono pequeño ({w}x{h}), usando icono por defecto')
                   img = make_default_icon(256)
               else:
-                  # Redimensionar al tamaño más grande para máxima calidad
                   img = img.resize((256, 256), Image.LANCZOS)
           except Exception as e:
-              print(f'No se pudo leer icon.png ({e}), generando icono por defecto')
+              print(f'Error leyendo icon.png ({e}), usando icono por defecto')
               img = make_default_icon(256)
 
-          # Guardar ICO con todos los tamaños
           imgs = [img.resize(s, Image.LANCZOS) for s in ICO_SIZES]
           imgs[0].save('assets/icon.ico', format='ICO',
-                       append_images=imgs[1:],
-                       sizes=ICO_SIZES)
+                       append_images=imgs[1:], sizes=ICO_SIZES)
           print('OK: assets/icon.ico generado')
           "
 
@@ -94,91 +88,55 @@ jobs:
       - name: Verificar que el EXE existe
         run: |
           if (!(Test-Path "dist\MC_Launcher\MC_Launcher.exe")) {
-              Write-Error "ERROR: No se encontró dist\MC_Launcher\MC_Launcher.exe"
+              Write-Error "No se encontró dist\MC_Launcher\MC_Launcher.exe"
               exit 1
           }
-          Write-Host "OK: EXE encontrado"
-          Get-ChildItem "dist\MC_Launcher" | Measure-Object | Select-Object -ExpandProperty Count | ForEach-Object { Write-Host "Archivos en dist: $_" }
+          $count = (Get-ChildItem "dist\MC_Launcher" -Recurse -File).Count
+          Write-Host "OK: EXE encontrado — $count archivos en dist\MC_Launcher"
         shell: powershell
 
-      # ── 6. WiX Toolset 3.11 ───────────────────────────────────────────
-      - name: Instalar WiX Toolset 3.11
-        run: |
-          $wixUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311.exe"
-          $wixOut = "$env:TEMP\wix311.exe"
-          Write-Host "Descargando WiX..."
-          Invoke-WebRequest -Uri $wixUrl -OutFile $wixOut
-          Write-Host "Instalando WiX..."
-          Start-Process -Wait -FilePath $wixOut -ArgumentList "/quiet"
-          $wixBin = "C:\Program Files (x86)\WiX Toolset v3.11\bin"
-          echo "$wixBin" | Out-File -Append -FilePath $env:GITHUB_PATH
-          Write-Host "OK: WiX instalado en $wixBin"
+      # ── 6. Inno Setup ─────────────────────────────────────────────────
+      - name: Crear carpeta de salida del instalador
+        run: New-Item -ItemType Directory -Force -Path dist_installer
         shell: powershell
 
-      # ── 7. Heat — cosecha automática de archivos ──────────────────────
-      - name: Generar components.wxs con Heat
-        run: |
-          heat dir "dist\MC_Launcher" `
-            -cg ProductComponents `
-            -dr INSTALLFOLDER `
-            -gg -gl `
-            -sfrag -srd -sreg `
-            -var var.SourceDir `
-            -out "installer\components.wxs"
-          Write-Host "OK: installer\components.wxs generado"
-        shell: powershell
-
-      # ── 8. Compilar fuentes WiX ───────────────────────────────────────
-      - name: Compilar WiX (candle)
+      - name: Compilar instalador con Inno Setup
         run: |
           $ver = "${{ steps.version.outputs.version }}"
-          candle `
-            -arch x64 `
-            "-dVersion=$ver" `
-            "-dSourceDir=dist\MC_Launcher" `
-            installer\launcher.wxs `
-            installer\components.wxs `
-            -out "installer\"
-          Write-Host "OK: .wixobj generados"
-        shell: powershell
-
-      # ── 9. Enlazar MSI ────────────────────────────────────────────────
-      - name: Enlazar MSI (light)
-        run: |
-          $ver = "${{ steps.version.outputs.version }}"
-          $msiName = "MC_Launcher_v${ver}_Windows_x64.msi"
-          light `
-            installer\launcher.wixobj `
-            installer\components.wixobj `
-            -ext WixUIExtension `
-            -out $msiName `
-            -spdb
-          Write-Host "OK: $msiName generado"
-          echo "msi_name=$msiName" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
-        shell: powershell
-        id: msi
-
-      # ── 10. Verificar MSI ─────────────────────────────────────────────
-      - name: Verificar MSI generado
-        run: |
-          $msi = "${{ steps.msi.outputs.msi_name }}"
-          if (!(Test-Path $msi)) {
-              Write-Error "ERROR: No se encontró $msi"
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $iscc /DAppVersion=$ver installer\launcher.iss
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "Inno Setup falló con código $LASTEXITCODE"
               exit 1
           }
-          $size = (Get-Item $msi).Length / 1MB
-          Write-Host "OK: $msi generado ($([math]::Round($size,1)) MB)"
         shell: powershell
 
-      # ── 11. Subir artifact (disponible sin crear un Release) ──────────
-      - name: Subir MSI como artifact
+      - name: Verificar instalador generado
+        id: installer
+        run: |
+          $ver = "${{ steps.version.outputs.version }}"
+          $name = "MC_Launcher_v${ver}_Windows_x64_Setup.exe"
+          $path = "dist_installer\$name"
+          if (!(Test-Path $path)) {
+              Write-Error "No se encontró $path"
+              Get-ChildItem dist_installer
+              exit 1
+          }
+          $size = [math]::Round((Get-Item $path).Length / 1MB, 1)
+          Write-Host "OK: $name generado ($size MB)"
+          echo "installer_name=$name" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+          echo "installer_path=$path" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+        shell: powershell
+
+      # ── 7. Subir como artifact (descargable sin crear Release) ────────
+      - name: Subir instalador como artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MC_Launcher_v${{ steps.version.outputs.version }}_MSI
-          path: ${{ steps.msi.outputs.msi_name }}
+          name: MC_Launcher_v${{ steps.version.outputs.version }}_Setup
+          path: ${{ steps.installer.outputs.installer_path }}
           retention-days: 30
 
-      # ── 12. Crear GitHub Release con el MSI adjunto ───────────────────
+      # ── 8. Crear GitHub Release ───────────────────────────────────────
       - name: Crear GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -188,23 +146,22 @@ jobs:
             ## ⛏️ MC Launcher v${{ steps.version.outputs.version }}
 
             ### 📥 Instalación
-            1. Descarga `MC_Launcher_v${{ steps.version.outputs.version }}_Windows_x64.msi`
+            1. Descarga `MC_Launcher_v${{ steps.version.outputs.version }}_Windows_x64_Setup.exe`
             2. Ejecuta el instalador (doble clic)
-            3. Sigue el asistente — elige la carpeta de instalación
+            3. Sigue el asistente — elige carpeta e instalación
             4. ¡Listo! Aparecerá en el Menú Inicio y en el Escritorio
 
             ### ⚙️ Requisitos
             - Windows 10 / 11 (64-bit)
             - Java 17 o superior *(el launcher lo detecta y avisa si no está instalado)*
 
-            ### 🔄 Actualización
-            Si ya tienes una versión anterior instalada, el MSI la desinstala automáticamente antes de instalar la nueva.
+            ### 🔄 Actualización desde versión anterior
+            El instalador desinstala la versión anterior automáticamente.
 
             ---
             *Desarrollado con Python + customtkinter*
-          files: ${{ steps.msi.outputs.msi_name }}
+          files: ${{ steps.installer.outputs.installer_path }}
           draft: false
           prerelease: false
-          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
