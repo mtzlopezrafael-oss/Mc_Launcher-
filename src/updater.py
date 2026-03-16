@@ -205,6 +205,52 @@ def _copy_tree(
             shutil.copy2(str(item), str(dest))
 
 
+# ── Instalador EXE (modo compilado PyInstaller) ────────────────────────────────
+
+def download_and_run_installer(
+    installer_url: str,
+    progress_cb: Optional[Callable[[int, int], None]] = None,
+    timeout: int = 180,
+) -> bool:
+    """
+    Descarga el instalador .exe de GitHub Releases a un archivo temporal y lo ejecuta.
+    Se usa cuando el launcher corre como EXE compilado (PyInstaller frozen).
+
+    El instalador se encarga de desinstalar la versión anterior e instalar la nueva.
+    Retorna True si el instalador se lanzó correctamente.
+    """
+    import os
+    import subprocess
+    import tempfile
+
+    try:
+        # Descargar el .exe instalador a un archivo temporal
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix="_mc_launcher_setup.exe")
+        os.close(tmp_fd)
+
+        req = urllib.request.Request(installer_url, headers=_HEADERS)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            total = int(resp.headers.get("Content-Length", 0))
+            downloaded = 0
+            chunk = 65536  # 64 KB
+            with open(tmp_path, "wb") as f:
+                while True:
+                    data = resp.read(chunk)
+                    if not data:
+                        break
+                    f.write(data)
+                    downloaded += len(data)
+                    if progress_cb and total:
+                        progress_cb(downloaded, total)
+
+        # Ejecutar el instalador y salir del launcher actual
+        subprocess.Popen([tmp_path], shell=False)
+        return True
+
+    except Exception:
+        return False
+
+
 # ── Reinicio post-actualización ────────────────────────────────────────────────
 
 def restart_launcher() -> None:

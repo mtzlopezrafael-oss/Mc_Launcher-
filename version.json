@@ -1,5 +1,5 @@
 {
-  "version": "3.0.3",
+  "version": "3.0.4",
   "download_url": "https://github.com/mtzlopezrafael-oss/Mc_Launcher-/archive/refs/heads/main.zip",
-  "changelog": "Boton de Discord en la barra inferior junto al boton Play"
+  "changelog": "Auto-update funcional en EXE instalado: descarga y ejecuta el nuevo instalador automaticamente"
 }

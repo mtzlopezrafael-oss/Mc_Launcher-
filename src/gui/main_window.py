@@ -30,7 +30,10 @@ except ImportError:
 
 # Auto-updater
 try:
-    from src.updater import check_for_updates, download_update, apply_update, UpdateInfo
+    from src.updater import (
+        check_for_updates, download_update, apply_update,
+        download_and_run_installer, UpdateInfo,
+    )
     from src.utils.config import UPDATE_VERSION_URL
     _UPDATER_AVAILABLE = True
 except ImportError:
@@ -64,7 +67,7 @@ class MainWindow(ctk.CTk):
     Layout: Sidebar (230px) | Content (flexible) | Bottom Bar (80px)
     """
 
-    APP_VERSION = "3.0.3"
+    APP_VERSION = "3.0.4"
     WINDOW_WIDTH = 1100
     WINDOW_HEIGHT = 680
     SIDEBAR_WIDTH = 230
@@ -486,7 +489,14 @@ class MainWindow(ctk.CTk):
         )
 
     def _on_install_update(self) -> None:
-        """Inicia la descarga e instalación de la actualización."""
+        """
+        Inicia la descarga e instalación de la actualización.
+
+        - EXE compilado (PyInstaller frozen): descarga el instalador .exe de
+          GitHub Releases y lo ejecuta. El instalador desinstala la versión
+          anterior e instala la nueva automáticamente.
+        - Código fuente (desarrollo): descarga el ZIP del repo y copia los archivos.
+        """
         if not self._update_info or not _UPDATER_AVAILABLE:
             return
 
@@ -494,39 +504,73 @@ class MainWindow(ctk.CTk):
         self.log(f"Descargando actualización v{self._update_info.version}...")
 
         info = self._update_info
+        is_frozen = getattr(sys, "frozen", False)  # True cuando corre como EXE compilado
+
+        def _progress(downloaded: int, total: int) -> None:
+            pct = int(downloaded / total * 100) if total else 0
+            try:
+                self.after(0, lambda p=pct: self.log(f"Descargando... {p}%"))
+            except Exception:
+                pass
 
         def _do_update():
-            def _progress(downloaded: int, total: int) -> None:
-                pct = int(downloaded / total * 100) if total else 0
-                try:
-                    self.after(0, lambda: self.log(f"Descargando... {pct}%"))
-                except Exception:
-                    pass
-
-            zip_path = download_update(info, progress_cb=_progress)
-
-            if zip_path is None:
-                try:
-                    self.after(0, lambda: self._update_error("No se pudo descargar la actualización"))
-                except Exception:
-                    pass
-                return
-
-            self.log("Aplicando actualización...")
-            ok = apply_update(zip_path)
-
-            if ok:
-                try:
-                    self.after(0, self._update_success)
-                except Exception:
-                    pass
+            if is_frozen:
+                # ── Modo EXE: descargar y ejecutar el instalador de GitHub Releases ──
+                ver = info.version
+                installer_url = (
+                    f"https://github.com/mtzlopezrafael-oss/Mc_Launcher-"
+                    f"/releases/download/v{ver}"
+                    f"/MC_Launcher_v{ver}_Windows_x64_Setup.exe"
+                )
+                self.log(f"Descargando instalador desde Releases...")
+                ok = download_and_run_installer(installer_url, progress_cb=_progress)
+                if ok:
+                    try:
+                        self.after(0, self._update_installer_launched)
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        self.after(0, lambda: self._update_error(
+                            "No se pudo descargar el instalador. "
+                            "Descárgalo manualmente desde GitHub Releases."
+                        ))
+                    except Exception:
+                        pass
             else:
-                try:
-                    self.after(0, lambda: self._update_error("Error al aplicar la actualización"))
-                except Exception:
-                    pass
+                # ── Modo fuente: ZIP update (desarrollo) ──────────────────────────
+                zip_path = download_update(info, progress_cb=_progress)
+                if zip_path is None:
+                    try:
+                        self.after(0, lambda: self._update_error(
+                            "No se pudo descargar la actualización"
+                        ))
+                    except Exception:
+                        pass
+                    return
+                self.log("Aplicando actualización...")
+                ok = apply_update(zip_path)
+                if ok:
+                    try:
+                        self.after(0, self._update_success)
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        self.after(0, lambda: self._update_error(
+                            "Error al aplicar la actualización"
+                        ))
+                    except Exception:
+                        pass
 
         threading.Thread(target=_do_update, daemon=True).start()
+
+    def _update_installer_launched(self) -> None:
+        """El instalador nuevo fue descargado y lanzado. Cerrar el launcher."""
+        self.log("✅ Instalador lanzado — cerrando el launcher para actualizar...", "success")
+        self._update_banner_btn.configure(text="✅ Instalando...", state="disabled")
+        # Esperar 2 segundos y cerrar para que el instalador tome el control
+        self.after(2000, lambda: sys.exit(0))
 
     def _update_success(self) -> None:
         self.log("✅ Actualización aplicada — reiniciando...", "success")
