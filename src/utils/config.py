@@ -17,7 +17,7 @@ LOG_DIR:       Path  = LAUNCHER_DIR / "logs"
 
 # ── Metadata ───────────────────────────────────────────────────────────────
 LAUNCHER_NAME:    str = "CustomTK Minecraft Launcher"
-LAUNCHER_VERSION: str = "3.0.7"   # Actualizar aquí y en version.json al publicar
+LAUNCHER_VERSION: str = "3.0.8"   # Actualizar aquí y en version.json al publicar
 
 # ── Window ─────────────────────────────────────────────────────────────────
 APP_WIDTH:       int = 1100
