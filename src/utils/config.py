@@ -13,10 +13,11 @@ INSTANCES_DIR: Path  = LAUNCHER_DIR / "instances"
 HISTORY_FILE:  Path  = LAUNCHER_DIR / "history.json"
 SETTINGS_FILE: Path  = LAUNCHER_DIR / "settings.json"
 PROFILES_FILE: Path  = LAUNCHER_DIR / "profiles.json"
+LOG_DIR:       Path  = LAUNCHER_DIR / "logs"
 
 # ── Metadata ───────────────────────────────────────────────────────────────
 LAUNCHER_NAME:    str = "CustomTK Minecraft Launcher"
-LAUNCHER_VERSION: str = "3.0.0"
+LAUNCHER_VERSION: str = "3.0.0"   # Actualizar aquí y en version.json al publicar
 
 # ── Window ─────────────────────────────────────────────────────────────────
 APP_WIDTH:       int = 1100

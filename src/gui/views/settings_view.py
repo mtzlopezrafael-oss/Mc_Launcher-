@@ -2,6 +2,10 @@ from __future__ import annotations
 
 """Vista de ajustes del launcher."""
 
+import os
+import platform
+import subprocess
+import threading
 import customtkinter as ctk
 from typing import TYPE_CHECKING
 
@@ -168,6 +172,59 @@ class SettingsView(ctk.CTkFrame):
                 text_color=COLORS["success"],
             )
 
+        # ── Diagnósticos ─────────────────────────────────────────
+        diag_card = SettingsCard(
+            scroll,
+            title="Diagnósticos",
+            description="Logs de errores para reportar problemas al desarrollador",
+            icon="🐛",
+        )
+        diag_card.pack(fill="x", pady=(0, 16))
+
+        # Ruta del log actual
+        from src.utils.logger import get_log_file, get_log_dir
+        _log_file = get_log_file()
+        _log_dir  = get_log_dir()
+        _log_path_text = str(_log_file) if _log_file else "No disponible"
+
+        self._diag_path_label = ctk.CTkLabel(
+            diag_card.content,
+            text=f"📄 {_log_path_text}",
+            font=ctk.CTkFont(size=11),
+            text_color=COLORS["text_dim"],
+            anchor="w",
+            wraplength=500,
+        )
+        self._diag_path_label.pack(anchor="w", pady=(0, 10))
+
+        diag_btn_row = ctk.CTkFrame(diag_card.content, fg_color="transparent")
+        diag_btn_row.pack(fill="x")
+
+        ctk.CTkButton(
+            diag_btn_row,
+            text="📂  Abrir carpeta de logs",
+            width=180, height=32,
+            font=ctk.CTkFont(size=12),
+            fg_color=COLORS["panel_light"],
+            hover_color=COLORS["border"],
+            text_color=COLORS["text"],
+            corner_radius=8,
+            command=self._open_log_folder,
+        ).pack(side="left", padx=(0, 8))
+
+        self._copy_log_btn = ctk.CTkButton(
+            diag_btn_row,
+            text="📋  Copiar log",
+            width=130, height=32,
+            font=ctk.CTkFont(size=12),
+            fg_color=COLORS["panel_light"],
+            hover_color=COLORS["border"],
+            text_color=COLORS["text"],
+            corner_radius=8,
+            command=self._copy_log_to_clipboard,
+        )
+        self._copy_log_btn.pack(side="left")
+
         # ── Acerca de ────────────────────────────────────────────
         about_card = SettingsCard(
             scroll,
@@ -240,3 +297,47 @@ class SettingsView(ctk.CTkFrame):
                 pass
 
         threading.Thread(target=_check, daemon=True).start()
+
+    # ── Diagnósticos ───────────────────────────────────────────────
+
+    def _open_log_folder(self) -> None:
+        """Abre la carpeta de logs en el explorador de archivos del SO."""
+        from src.utils.logger import get_log_dir
+        log_dir = get_log_dir()
+        if log_dir is None or not log_dir.exists():
+            self.app.log("No se encontró la carpeta de logs", "warning")
+            return
+        try:
+            sys_name = platform.system()
+            if sys_name == "Windows":
+                os.startfile(str(log_dir))          # type: ignore[attr-defined]
+            elif sys_name == "Darwin":
+                subprocess.Popen(["open", str(log_dir)])
+            else:
+                subprocess.Popen(["xdg-open", str(log_dir)])
+        except Exception as exc:
+            self.app.log(f"No se pudo abrir la carpeta de logs: {exc}", "error")
+
+    def _copy_log_to_clipboard(self) -> None:
+        """
+        Copia el contenido de las últimas 200 líneas del log al portapapeles.
+        Muestra confirmación en el botón.
+        """
+        from src.utils.logger import read_log_tail
+        content = read_log_tail(200)
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(content)
+            # Feedback visual: cambia el texto del botón por 2 segundos
+            self._copy_log_btn.configure(
+                text="✓  Copiado",
+                fg_color=COLORS["success"],
+                text_color="#ffffff",
+            )
+            self.after(2000, lambda: self._copy_log_btn.configure(
+                text="📋  Copiar log",
+                fg_color=COLORS["panel_light"],
+                text_color=COLORS["text"],
+            ))
+        except Exception as exc:
+            self.app.log(f"No se pudo copiar el log: {exc}", "error")

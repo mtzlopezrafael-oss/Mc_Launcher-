@@ -12,6 +12,9 @@ from typing import Optional, Dict, List
 
 import customtkinter as ctk
 
+from src.utils.logger import get_logger as _get_logger
+_mw_log = _get_logger("launcher.gui")
+
 from src.gui.components import (
     COLORS, LOADER_COLORS,
     AvatarWidget, PlayButton, ProgressBarWithLabel, NavButton,
@@ -700,7 +703,15 @@ class MainWindow(ctk.CTk):
     # =================================================================
 
     def log(self, message: str, level: str = "info"):
-        """Envía un mensaje al LogView. Thread-safe: despacha al hilo principal."""
+        """
+        Envía un mensaje al LogView y al archivo de log.
+        Thread-safe: despacha al hilo principal para la UI.
+        """
+        # ── Archivo de log (siempre, desde cualquier hilo) ────────────
+        _file_log = getattr(_mw_log, level, None) or _mw_log.info
+        _file_log(message)
+
+        # ── UI (sólo en hilo principal vía after) ─────────────────────
         def _do():
             try:
                 self._log_view.log(message, level)
