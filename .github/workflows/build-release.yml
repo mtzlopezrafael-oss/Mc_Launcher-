@@ -47,12 +47,40 @@ jobs:
       - name: Convertir icon.png a icon.ico
         run: |
           python -c "
-          from PIL import Image
-          img = Image.open('assets/icon.png').convert('RGBA')
-          img.save(
-              'assets/icon.ico',
-              sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)]
-          )
+          from PIL import Image, ImageDraw
+
+          ICO_SIZES = [(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)]
+
+          def make_default_icon(size=256):
+              '''Genera un icono verde con pico de minería si el PNG es inválido.'''
+              img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+              d = ImageDraw.Draw(img)
+              # Fondo redondeado verde Minecraft
+              d.rounded_rectangle([4, 4, size-4, size-4], radius=size//8,
+                                   fill=(76, 153, 0, 255))
+              # Cuadrado blanco central (símbolo de bloque)
+              m = size // 4
+              d.rectangle([m, m, size-m, size-m], fill=(255, 255, 255, 200))
+              return img
+
+          try:
+              img = Image.open('assets/icon.png').convert('RGBA')
+              w, h = img.size
+              if w < 32 or h < 32:
+                  print(f'Icono demasiado pequeño ({w}x{h}), generando icono por defecto')
+                  img = make_default_icon(256)
+              else:
+                  # Redimensionar al tamaño más grande para máxima calidad
+                  img = img.resize((256, 256), Image.LANCZOS)
+          except Exception as e:
+              print(f'No se pudo leer icon.png ({e}), generando icono por defecto')
+              img = make_default_icon(256)
+
+          # Guardar ICO con todos los tamaños
+          imgs = [img.resize(s, Image.LANCZOS) for s in ICO_SIZES]
+          imgs[0].save('assets/icon.ico', format='ICO',
+                       append_images=imgs[1:],
+                       sizes=ICO_SIZES)
           print('OK: assets/icon.ico generado')
           "
 
