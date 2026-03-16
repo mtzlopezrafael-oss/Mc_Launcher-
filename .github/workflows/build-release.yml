@@ -88,11 +88,11 @@ jobs:
       - name: Verificar que el EXE existe
         run: |
           if (!(Test-Path "dist\MC_Launcher\MC_Launcher.exe")) {
-              Write-Error "No se encontró dist\MC_Launcher\MC_Launcher.exe"
+              Write-Error "ERROR: No se encontro dist\MC_Launcher\MC_Launcher.exe"
               exit 1
           }
           $count = (Get-ChildItem "dist\MC_Launcher" -Recurse -File).Count
-          Write-Host "OK: EXE encontrado — $count archivos en dist\MC_Launcher"
+          Write-Host "OK: EXE encontrado - $count archivos en dist\MC_Launcher"
         shell: powershell
 
       # ── 6. Inno Setup ─────────────────────────────────────────────────
@@ -148,7 +148,7 @@ jobs:
             ### 📥 Instalación
             1. Descarga `MC_Launcher_v${{ steps.version.outputs.version }}_Windows_x64_Setup.exe`
             2. Ejecuta el instalador (doble clic)
-            3. Sigue el asistente — elige carpeta e instalación
+            3. Sigue el asistente - elige carpeta e instalacion
             4. ¡Listo! Aparecerá en el Menú Inicio y en el Escritorio
 
             ### ⚙️ Requisitos
