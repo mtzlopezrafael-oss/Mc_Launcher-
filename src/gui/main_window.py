@@ -68,7 +68,7 @@ class MainWindow(ctk.CTk):
     Layout: Sidebar (230px) | Content (flexible) | Bottom Bar (80px)
     """
 
-    APP_VERSION = "3.0.5"
+    APP_VERSION = "3.0.6"
     WINDOW_WIDTH = 1100
     WINDOW_HEIGHT = 680
     SIDEBAR_WIDTH = 230
@@ -508,9 +508,14 @@ class MainWindow(ctk.CTk):
         is_frozen = getattr(sys, "frozen", False)  # True cuando corre como EXE compilado
 
         def _progress(downloaded: int, total: int) -> None:
-            pct = int(downloaded / total * 100) if total else 0
+            if total:
+                pct = int(downloaded / total * 100)
+                msg = f"Descargando... {pct}%"
+            else:
+                mb = downloaded / (1024 * 1024)
+                msg = f"Descargando... {mb:.1f} MB"
             try:
-                self.after(0, lambda p=pct: self.log(f"Descargando... {p}%"))
+                self.after(0, lambda m=msg: self._update_banner_btn.configure(text=m))
             except Exception:
                 pass
 
@@ -523,7 +528,8 @@ class MainWindow(ctk.CTk):
                     f"/releases/download/v{ver}"
                     f"/MC_Launcher_v{ver}_Windows_x64_Setup.exe"
                 )
-                self.log(f"Descargando instalador desde Releases...")
+                _mw_log.info("URL del instalador: %s", installer_url)
+                self.log(f"Descargando instalador v{ver} desde GitHub Releases...")
                 ok = download_and_run_installer(installer_url, progress_cb=_progress)
                 if ok:
                     try:
@@ -531,10 +537,11 @@ class MainWindow(ctk.CTk):
                     except Exception:
                         pass
                 else:
+                    _mw_log.error("download_and_run_installer retorno False")
                     try:
                         self.after(0, lambda: self._update_error(
                             "No se pudo descargar el instalador. "
-                            "Descárgalo manualmente desde GitHub Releases."
+                            "Descargalo manualmente desde GitHub Releases."
                         ))
                     except Exception:
                         pass

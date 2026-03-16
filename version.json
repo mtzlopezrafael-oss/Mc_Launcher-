@@ -1,5 +1,5 @@
 {
-  "version": "3.0.5",
+  "version": "3.0.6",
   "download_url": "https://github.com/mtzlopezrafael-oss/Mc_Launcher-/archive/refs/heads/main.zip",
-  "changelog": "Corrección de bugs: import sys faltante, argumentos de log, expansión de ruta home"
+  "changelog": "Fix auto-update: mejor manejo de errores, progreso visible en boton, logging detallado"
 }

@@ -210,7 +210,7 @@ def _copy_tree(
 def download_and_run_installer(
     installer_url: str,
     progress_cb: Optional[Callable[[int, int], None]] = None,
-    timeout: int = 180,
+    timeout: int = 300,
 ) -> bool:
     """
     Descarga el instalador .exe de GitHub Releases a un archivo temporal y lo ejecuta.
@@ -219,20 +219,26 @@ def download_and_run_installer(
     El instalador se encarga de desinstalar la versión anterior e instalar la nueva.
     Retorna True si el instalador se lanzó correctamente.
     """
+    import logging
     import os
     import subprocess
     import tempfile
+
+    log = logging.getLogger("launcher.updater")
 
     try:
         # Descargar el .exe instalador a un archivo temporal
         tmp_fd, tmp_path = tempfile.mkstemp(suffix="_mc_launcher_setup.exe")
         os.close(tmp_fd)
 
+        log.info("Descargando instalador desde: %s", installer_url)
         req = urllib.request.Request(installer_url, headers=_HEADERS)
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             total = int(resp.headers.get("Content-Length", 0))
+            log.info("Content-Length reportado: %d bytes", total)
             downloaded = 0
             chunk = 65536  # 64 KB
+            last_pct_reported = -1
             with open(tmp_path, "wb") as f:
                 while True:
                     data = resp.read(chunk)
@@ -240,14 +246,37 @@ def download_and_run_installer(
                         break
                     f.write(data)
                     downloaded += len(data)
-                    if progress_cb and total:
-                        progress_cb(downloaded, total)
+                    if progress_cb:
+                        if total:
+                            pct = int(downloaded / total * 100)
+                            # Solo reportar cada 5% para no saturar el UI
+                            if pct >= last_pct_reported + 5:
+                                last_pct_reported = pct
+                                progress_cb(downloaded, total)
+                        else:
+                            # Sin Content-Length: reportar MB descargados cada 512KB
+                            if downloaded % (512 * 1024) < chunk:
+                                progress_cb(downloaded, 0)
+
+        file_size = os.path.getsize(tmp_path)
+        log.info("Descarga completa: %d bytes en %s", file_size, tmp_path)
+
+        if file_size < 100_000:
+            # Un instalador real no pesa menos de 100KB — probablemente es un 404 HTML
+            log.error("Archivo descargado muy pequeno (%d bytes), posible error", file_size)
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            return False
 
         # Ejecutar el instalador y salir del launcher actual
+        log.info("Lanzando instalador: %s", tmp_path)
         subprocess.Popen([tmp_path], shell=False)
         return True
 
-    except Exception:
+    except Exception as exc:
+        log.exception("Error descargando/ejecutando instalador: %s", exc)
         return False
 
 
