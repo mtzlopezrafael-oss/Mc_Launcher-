@@ -9,6 +9,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write      # Necesario para crear GitHub Releases y subir assets
+
 jobs:
   build-msi:
     name: Build MSI on Windows
