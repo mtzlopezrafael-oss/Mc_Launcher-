@@ -68,7 +68,7 @@ class MainWindow(ctk.CTk):
     Layout: Sidebar (230px) | Content (flexible) | Bottom Bar (80px)
     """
 
-    APP_VERSION = "3.0.6"
+    APP_VERSION = "3.0.7"
     WINDOW_WIDTH = 1100
     WINDOW_HEIGHT = 680
     SIDEBAR_WIDTH = 230

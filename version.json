@@ -1,5 +1,5 @@
 {
-  "version": "3.0.6",
+  "version": "3.0.7",
   "download_url": "https://github.com/mtzlopezrafael-oss/Mc_Launcher-/archive/refs/heads/main.zip",
-  "changelog": "Fix auto-update: mejor manejo de errores, progreso visible en boton, logging detallado"
+  "changelog": "Icono de Discord actualizado con logo oficial"
 }
