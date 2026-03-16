@@ -64,7 +64,7 @@ class MainWindow(ctk.CTk):
     Layout: Sidebar (230px) | Content (flexible) | Bottom Bar (80px)
     """
 
-    APP_VERSION = "3.0.2"
+    APP_VERSION = "3.0.3"
     WINDOW_WIDTH = 1100
     WINDOW_HEIGHT = 680
     SIDEBAR_WIDTH = 230
@@ -281,12 +281,27 @@ class MainWindow(ctk.CTk):
         )
         self._profile_info_label.pack(anchor="w")
 
-        # Right: Play button + Progress
+        # Right: Discord + Play button + Progress
         right = ctk.CTkFrame(self._bottom_bar_frame, fg_color="transparent")
         right.pack(side="right", fill="y", padx=20)
 
         self._play_button = PlayButton(right, command=self._on_play_click)
         self._play_button.pack(side="right", pady=16)
+
+        # Botón de Discord (al lado izquierdo del Play)
+        _dc_icon = _ico("discord", (28, 28))
+        _dc_kw = {"image": _dc_icon} if _dc_icon else {}
+        self._discord_btn = ctk.CTkButton(
+            right, text="" if _dc_icon else "Discord", width=44, height=44,
+            fg_color=COLORS["panel_light"],
+            hover_color="#5865F2",
+            text_color=COLORS["text"],
+            font=ctk.CTkFont(size=12),
+            corner_radius=10,
+            command=self._open_discord,
+            **_dc_kw,
+        )
+        self._discord_btn.pack(side="right", padx=(0, 12), pady=16)
 
         self._launch_progress = ProgressBarWithLabel(right, width=200)
 
@@ -529,6 +544,12 @@ class MainWindow(ctk.CTk):
         )
 
     # ── Snapshot preference ───────────────────────────────────────
+
+    def _open_discord(self) -> None:
+        """Abre el servidor de Discord en el navegador."""
+        import webbrowser
+        webbrowser.open("https://discord.gg/bE78ef8wRU")
+        self.log("Abriendo servidor de Discord...")
 
     def toggle_fullscreen(self) -> None:
         """Alterna entre ventana normal y pantalla completa."""
