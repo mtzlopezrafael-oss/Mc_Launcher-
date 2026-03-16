@@ -11,6 +11,9 @@
 #define AppDataDir   ".ctk-mc-launcher"
 
 [Setup]
+; Rutas relativas a la raíz del proyecto (un nivel arriba de installer/)
+SourceDir=..
+
 ; Identificador único — NO cambiar entre versiones (permite actualización silenciosa)
 AppId={{A4B2C3D4-E5F6-7890-ABCD-EF1234567890}
 AppName={#AppName}
