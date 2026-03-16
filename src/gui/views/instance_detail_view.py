@@ -176,7 +176,7 @@ class InstanceDetailView(ctk.CTkFrame):
 
         def _pick_dir() -> None:
             from tkinter import filedialog
-            chosen = filedialog.askdirectory(initialdir=self._dir_path[0] or "~")
+            chosen = filedialog.askdirectory(initialdir=self._dir_path[0] or str(Path.home()))
             if chosen:
                 self._dir_path[0] = chosen
                 self._dir_label.configure(

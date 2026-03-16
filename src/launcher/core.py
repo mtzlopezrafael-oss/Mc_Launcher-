@@ -122,8 +122,7 @@ class LauncherCore:
                 else:
                     self.log(
                         f"⚠️ ADVERTENCIA: No se encontró el version_id de {settings.loader}. "
-                        f"El juego se lanzará sin mod loader — los mods NO cargarán.",
-                        "warning",
+                        f"El juego se lanzará sin mod loader — los mods NO cargarán."
                     )
 
             # 6. Construir opciones y lanzar

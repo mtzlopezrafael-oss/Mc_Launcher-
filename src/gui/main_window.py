@@ -6,6 +6,7 @@ Ventana principal: layout, sidebar, barra inferior, navegación y lanzamiento.
 Las páginas individuales están en src/gui/views/.
 """
 
+import sys
 import threading
 from pathlib import Path
 from typing import Optional, Dict, List
@@ -67,7 +68,7 @@ class MainWindow(ctk.CTk):
     Layout: Sidebar (230px) | Content (flexible) | Bottom Bar (80px)
     """
 
-    APP_VERSION = "3.0.4"
+    APP_VERSION = "3.0.5"
     WINDOW_WIDTH = 1100
     WINDOW_HEIGHT = 680
     SIDEBAR_WIDTH = 230

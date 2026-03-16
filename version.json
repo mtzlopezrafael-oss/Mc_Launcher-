@@ -1,5 +1,5 @@
 {
-  "version": "3.0.4",
+  "version": "3.0.5",
   "download_url": "https://github.com/mtzlopezrafael-oss/Mc_Launcher-/archive/refs/heads/main.zip",
-  "changelog": "Auto-update funcional en EXE instalado: descarga y ejecuta el nuevo instalador automaticamente"
+  "changelog": "Corrección de bugs: import sys faltante, argumentos de log, expansión de ruta home"
 }
