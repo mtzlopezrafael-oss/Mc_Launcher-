@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  MC Launcher — WiX Installer Source
+
+  Este archivo define el instalador MSI.
+  El archivo installer/components.wxs es generado automáticamente por heat.exe
+  durante la pipeline de GitHub Actions — no editar a mano.
+
+  Documentación WiX: https://wixtoolset.org/documentation/
+-->
+
+<?define Version      = "$(var.Version)"      ?>
+<?define ProductName  = "MC Launcher"         ?>
+<?define Manufacturer = "mtzlopezrafael-oss"  ?>
+<?define ExeName      = "MC_Launcher.exe"     ?>
+
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+  <Product
+    Id="*"
+    Name="$(var.ProductName)"
+    Language="3082"
+    Version="$(var.Version)"
+    Manufacturer="$(var.Manufacturer)"
+    UpgradeCode="{B7E8F9A0-B1C2-D3E4-F5A6-B7C8D9E0F1A2}">
+
+    <!-- ── Metadatos del paquete ──────────────────────────────────────── -->
+    <Package
+      InstallerVersion="500"
+      Compressed="yes"
+      InstallScope="perMachine"
+      Platform="x64"
+      Description="$(var.ProductName) — Minecraft Launcher moderno"
+      Manufacturer="$(var.Manufacturer)"
+      Comments="Instalador generado automáticamente por GitHub Actions" />
+
+    <!-- Desinstala la versión anterior silenciosamente antes de instalar -->
+    <MajorUpgrade
+      Schedule="afterInstallInitialize"
+      DowngradeErrorMessage="Ya tienes una versión más reciente de $(var.ProductName) instalada." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- ── Iconos y propiedades de Add/Remove Programs ──────────────── -->
+    <Icon Id="AppIcon" SourceFile="assets\icon.ico" />
+    <Property Id="ARPPRODUCTICON"  Value="AppIcon" />
+    <Property Id="ARPHELPLINK"     Value="https://github.com/mtzlopezrafael-oss/Mc_Launcher-" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/mtzlopezrafael-oss/Mc_Launcher-" />
+    <Property Id="ARPNOREPAIR"     Value="1" />  <!-- Sin botón Reparar -->
+
+    <!-- ── Interfaz de usuario ──────────────────────────────────────── -->
+    <UIRef Id="WixUI_InstallDir" />
+    <UIRef Id="WixUI_ErrorProgressText" />
+    <WixVariable Id="WixUILicenseRtf" Value="installer\license.rtf" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+
+    <!-- ── Features ─────────────────────────────────────────────────── -->
+    <Feature Id="ProductFeature" Title="$(var.ProductName)" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+
+    <!-- ── Estructura de directorios ────────────────────────────────── -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+
+      <!-- Archivos del programa → C:\Program Files\mtzlopezrafael-oss\MC Launcher -->
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="ManufacturerFolder" Name="$(var.Manufacturer)">
+          <Directory Id="INSTALLFOLDER" Name="$(var.ProductName)" />
+        </Directory>
+      </Directory>
+
+      <!-- Menú Inicio → MC Launcher -->
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="AppProgramsFolder" Name="$(var.ProductName)" />
+      </Directory>
+
+      <!-- Escritorio -->
+      <Directory Id="DesktopFolder" Name="Desktop" />
+
+    </Directory>
+
+    <!-- ── Acceso directo en Menú Inicio ────────────────────────────── -->
+    <DirectoryRef Id="AppProgramsFolder">
+      <Component Id="StartMenuShortcut"
+                 Guid="{C8F9A0B1-C2D3-E4F5-A6B7-C8D9E0F1A2B3}">
+        <Shortcut Id="StartMenuSC"
+                  Name="$(var.ProductName)"
+                  Description="Minecraft Launcher moderno"
+                  Target="[INSTALLFOLDER]$(var.ExeName)"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="AppIcon" />
+        <Shortcut Id="UninstallSC"
+                  Name="Desinstalar $(var.ProductName)"
+                  Target="[System64Folder]msiexec.exe"
+                  Arguments="/x [ProductCode]" />
+        <RemoveFolder Id="RemoveAppProgramsFolder"
+                      Directory="AppProgramsFolder"
+                      On="uninstall" />
+        <RegistryValue
+          Root="HKCU"
+          Key="Software\$(var.Manufacturer)\$(var.ProductName)"
+          Name="StartMenu"
+          Type="integer" Value="1"
+          KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- ── Acceso directo en Escritorio ─────────────────────────────── -->
+    <DirectoryRef Id="DesktopFolder">
+      <Component Id="DesktopShortcut"
+                 Guid="{D9E0F1A2-B3C4-D5E6-F7A8-B9C0D1E2F3A4}">
+        <Shortcut Id="DesktopSC"
+                  Name="$(var.ProductName)"
+                  Description="Minecraft Launcher moderno"
+                  Target="[INSTALLFOLDER]$(var.ExeName)"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="AppIcon" />
+        <RegistryValue
+          Root="HKCU"
+          Key="Software\$(var.Manufacturer)\$(var.ProductName)"
+          Name="Desktop"
+          Type="integer" Value="1"
+          KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+  </Product>
+</Wix>

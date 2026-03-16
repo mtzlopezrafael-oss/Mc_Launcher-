@@ -37,3 +37,12 @@ desktop.ini
 
 # Logs
 *.log
+
+# PyInstaller / WiX — archivos generados en la build pipeline
+assets/icon.ico
+installer/components.wxs
+installer/*.wixobj
+installer/*.wixpdb
+installer/*.wixout
+*.msi
+*.msm
