@@ -1,5 +1,5 @@
 {
-  "version": "3.0.0",
+  "version": "3.0.1",
   "download_url": "https://github.com/mtzlopezrafael-oss/Mc_Launcher-/archive/refs/heads/main.zip",
-  "changelog": "Primera versión pública del launcher"
+  "changelog": "Sistema de logging persistente: logs de errores en archivo, crash handler global y panel de diagnósticos en Ajustes"
 }
