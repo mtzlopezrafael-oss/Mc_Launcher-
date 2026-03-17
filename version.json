@@ -1,5 +1,5 @@
 {
-  "version": "3.0.8",
+  "version": "3.0.9",
   "download_url": "https://github.com/mtzlopezrafael-oss/Mc_Launcher-/archive/refs/heads/main.zip",
-  "changelog": "Icono de Discord reemplazado con logo oficial PNG"
+  "changelog": "Auditoria de bugs: fix RAM parsing, validacion URL mods, cierre de log handlers"
 }

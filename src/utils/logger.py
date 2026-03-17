@@ -53,8 +53,9 @@ def setup_logging(version: str, log_dir: Path) -> Path:
     root.setLevel(logging.DEBUG)
 
     # Evitar duplicar handlers si setup_logging se llama más de una vez
-    if root.handlers:
-        root.handlers.clear()
+    for handler in root.handlers[:]:
+        handler.close()
+        root.removeHandler(handler)
 
     fmt = logging.Formatter(
         fmt="[%(asctime)s] [%(levelname)-8s] [%(name)s] %(message)s",

@@ -234,7 +234,11 @@ class NewProfileDialog(_BaseDialog):
         loader_version = None if loader_ver_raw in ("N/A", "latest", "Cargando...") else loader_ver_raw
 
         ram_label = self._ram.get()
-        ram_mb = int(ram_label.split()[0]) * 1024 if "GB" in ram_label else int(ram_label.split()[0])
+        try:
+            parts = ram_label.split()
+            ram_mb = int(parts[0]) * 1024 if "GB" in ram_label else int(parts[0])
+        except (IndexError, ValueError):
+            ram_mb = config.DEFAULT_RAM_MB
 
         data = {
             "name":           name,

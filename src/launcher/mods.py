@@ -136,7 +136,7 @@ def get_modrinth_download(
         url += "?" + urllib.parse.urlencode(params)
 
     data = _get(url, headers=_HEADERS_MODRINTH)
-    if not data or not isinstance(data, list) or not data:
+    if not data or not isinstance(data, list):
         return None
 
     # Tomar la primera versión (más reciente)
@@ -147,7 +147,10 @@ def get_modrinth_download(
 
     # Preferir el archivo primario
     primary = next((f for f in files if f.get("primary")), files[0])
-    return primary.get("url"), primary.get("filename", "mod.jar")
+    dl_url = primary.get("url")
+    if not dl_url:
+        return None
+    return dl_url, primary.get("filename", "mod.jar")
 
 
 # ══════════════════════════════════════════════════════════════════════════

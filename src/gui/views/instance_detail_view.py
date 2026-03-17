@@ -447,7 +447,11 @@ class InstanceDetailView(ctk.CTkFrame):
         n  = self._name_entry.get().strip() or self._profile.get("name", "Perfil")
         u  = self._user_entry.get().strip() or "Player"
         rl = self._ram_option.get()
-        rm = int(rl.split()[0]) * 1024 if "GB" in rl else int(rl.split()[0])
+        try:
+            parts = rl.split()
+            rm = int(parts[0]) * 1024 if "GB" in rl else int(parts[0])
+        except (IndexError, ValueError):
+            rm = config.DEFAULT_RAM_MB
         gd = self._dir_path[0] or self._profile.get("game_dir", "")
 
         profiles.update(self._profile["id"], name=n, username=u, ram_mb=rm, game_dir=gd)
