@@ -1,5 +1,5 @@
 {
-  "version": "3.0.10",
+  "version": "3.1.0",
   "download_url": "https://github.com/mtzlopezrafael-oss/Mc_Launcher-/archive/refs/heads/main.zip",
-  "changelog": "Terminal de Minecraft integrada en la pestana de Logs del launcher"
+  "changelog": "Boton Playing mientras Minecraft esta abierto, terminal integrada en Logs"
 }

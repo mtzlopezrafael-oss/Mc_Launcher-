@@ -243,6 +243,26 @@ class PlayButton(ctk.CTkButton):
                 state="normal"
             )
 
+    def set_playing(self, playing: bool):
+        """Cambia el botón al estado 'Playing' mientras Minecraft está abierto."""
+        self._is_launching = playing
+        if playing:
+            self.configure(
+                text="Playing",
+                fg_color="#7c3aed",
+                hover_color="#7c3aed",
+                state="disabled"
+            )
+        else:
+            self._is_launching = False
+            self._is_locked = False
+            self.configure(
+                text="PLAY",
+                fg_color=COLORS["success"],
+                hover_color="#00cc6a",
+                state="normal"
+            )
+
     # FIX-H: Método set_locked requerido por main_window.py.
     # main_window llama set_locked(True, reason="no_profile") y
     # set_locked(True, reason="installing") — sin este método hay AttributeError.

@@ -68,7 +68,7 @@ class MainWindow(ctk.CTk):
     Layout: Sidebar (230px) | Content (flexible) | Bottom Bar (80px)
     """
 
-    APP_VERSION = "3.0.10"
+    APP_VERSION = "3.1.0"
     WINDOW_WIDTH = 1100
     WINDOW_HEIGHT = 680
     SIDEBAR_WIDTH = 230
@@ -765,10 +765,14 @@ class MainWindow(ctk.CTk):
         threading.Thread(target=launch, daemon=True).start()
 
     def _on_launch_complete(self):
-        self._is_launching = False
-        # FIX-063: NO resetear _close_on_launch ni recrear LauncherCore
-        self._play_button.set_launching(False)
+        # No resetear _is_launching aqui — se resetea cuando Minecraft se cierra
         self._launch_progress.pack_forget()
+        self._play_button.set_playing(True)
+
+    def _on_game_exited(self):
+        """Minecraft se cerró — restaurar botón de Play."""
+        self._is_launching = False
+        self._play_button.set_playing(False)
 
     def _on_launch_error(self, message: str):
         self._is_launching = False
@@ -811,6 +815,8 @@ class MainWindow(ctk.CTk):
                         self.after(0, lambda r=retcode: self.log(
                             f"[MC] Minecraft se cerró con código {r}", "warning"
                         ))
+                    # Restaurar botón de Play
+                    self.after(0, self._on_game_exited)
                 except Exception:
                     pass
             except Exception:
