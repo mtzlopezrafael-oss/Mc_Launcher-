@@ -68,7 +68,7 @@ class MainWindow(ctk.CTk):
     Layout: Sidebar (230px) | Content (flexible) | Bottom Bar (80px)
     """
 
-    APP_VERSION = "3.0.9"
+    APP_VERSION = "3.0.10"
     WINDOW_WIDTH = 1100
     WINDOW_HEIGHT = 680
     SIDEBAR_WIDTH = 230
@@ -716,12 +716,18 @@ class MainWindow(ctk.CTk):
         def done_callback(process):
             try:
                 self.after(0, self._on_launch_complete)
+                # Cambiar a pestaña de Logs para ver la salida del juego
+                self.after(0, lambda: self._navigate("log"))
             except Exception:
                 pass
 
             from src.utils import profiles as _prof
             _prof.touch_last_played(profile.get("id"))
             self.log("Juego iniciado", "success")
+
+            # Leer stdout/stderr del proceso y enviarlo al log del launcher
+            if process and process.stdout:
+                self._read_game_output(process)
 
             # FIX-062: usar la variable booleana, NO el widget — se ejecuta desde Thread
             if self._close_on_launch:
@@ -770,6 +776,47 @@ class MainWindow(ctk.CTk):
         self._play_button.set_launching(False)
         self._launch_progress.pack_forget()
         self.log(f"Error al iniciar: {message}", "error")
+
+    def _read_game_output(self, process: "subprocess.Popen") -> None:
+        """Lee stdout/stderr del proceso de Minecraft y lo envía al LogView."""
+        import subprocess as _sp
+
+        def _reader():
+            try:
+                for raw_line in process.stdout:
+                    try:
+                        line = raw_line.decode("utf-8", errors="replace").rstrip()
+                    except Exception:
+                        line = str(raw_line).rstrip()
+                    if not line:
+                        continue
+                    # Detectar nivel por contenido de la línea
+                    lower = line.lower()
+                    if "error" in lower or "exception" in lower or "fatal" in lower:
+                        lvl = "error"
+                    elif "warn" in lower:
+                        lvl = "warning"
+                    else:
+                        lvl = "info"
+                    try:
+                        self.after(0, lambda m=line, l=lvl: self.log(f"[MC] {m}", l))
+                    except Exception:
+                        pass
+                # Proceso terminó
+                retcode = process.wait()
+                try:
+                    if retcode == 0:
+                        self.after(0, lambda: self.log("[MC] Minecraft se cerró normalmente", "success"))
+                    else:
+                        self.after(0, lambda r=retcode: self.log(
+                            f"[MC] Minecraft se cerró con código {r}", "warning"
+                        ))
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+        threading.Thread(target=_reader, daemon=True, name="mc-output-reader").start()
 
     # =================================================================
     #  LOGGING

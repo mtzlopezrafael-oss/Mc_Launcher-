@@ -155,11 +155,17 @@ class LauncherCore:
                     launch_version_id, mc_dir, launch_options,
                 )
                 self.log("Lanzando Minecraft...")
-                # OPT-006: creationflags solo existe en Windows — condicionar el kwarg
                 import platform
-                popen_kwargs = {"cwd": mc_dir}
-                if platform.system() == "Windows" and close_on_launch:
-                    popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+                popen_kwargs = {
+                    "cwd": mc_dir,
+                    "stdout": subprocess.PIPE,
+                    "stderr": subprocess.STDOUT,
+                }
+                # En Windows: ocultar la ventana de consola negra
+                if platform.system() == "Windows":
+                    popen_kwargs["creationflags"] = (
+                        subprocess.CREATE_NO_WINDOW
+                    )
                 process = subprocess.Popen(cmd, **popen_kwargs)
                 done_cb(process)
             except Exception as exc:

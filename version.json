@@ -1,5 +1,5 @@
 {
-  "version": "3.0.9",
+  "version": "3.0.10",
   "download_url": "https://github.com/mtzlopezrafael-oss/Mc_Launcher-/archive/refs/heads/main.zip",
-  "changelog": "Auditoria de bugs: fix RAM parsing, validacion URL mods, cierre de log handlers"
+  "changelog": "Terminal de Minecraft integrada en la pestana de Logs del launcher"
 }
