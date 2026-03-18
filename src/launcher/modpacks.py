@@ -277,11 +277,12 @@ def install_modpack(
       3. Copiar overrides/ al directorio de la instancia
       4. Descargar cada mod listado en el manifiesto
     """
+    _logger = _log  # capturar logger del módulo antes de shadowing
+
     def _log(msg: str):
-        _logging_log = _log  # evitar shadowing
         if log_cb:
             log_cb(msg)
-        _logging_log.info(msg)
+        _logger.info(msg)
 
     tmp_dir = None
     try:
@@ -312,8 +313,10 @@ def install_modpack(
 
         with zipfile.ZipFile(pack_path, "r") as zf:
             # Seguridad: validar path traversal
+            extract_resolved = extract_dir.resolve()
             for info in zf.infolist():
-                if ".." in info.filename or info.filename.startswith("/"):
+                target = (extract_dir / info.filename).resolve()
+                if not str(target).startswith(str(extract_resolved)):
                     _log("ERROR: archivo ZIP con path traversal detectado")
                     return False
             zf.extractall(extract_dir)
@@ -375,8 +378,7 @@ def install_modpack(
 
     except Exception as e:
         _log(f"Error instalando modpack: {e}")
-        _log_module = logging.getLogger("launcher.modpacks")
-        _log_module.exception("Error en install_modpack")
+        _logger.exception("Error en install_modpack")
         return False
     finally:
         if tmp_dir and tmp_dir.exists():

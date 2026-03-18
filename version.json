@@ -1,5 +1,5 @@
 {
-  "version": "3.2.0",
+  "version": "3.2.1",
   "download_url": "https://github.com/mtzlopezrafael-oss/Mc_Launcher-/archive/refs/heads/main.zip",
-  "changelog": "Nueva funcionalidad: instalacion de modpacks desde Modrinth y CurseForge dentro de cada instancia"
+  "changelog": "Fix critico: _log shadowing en modpacks.py, path traversal mejorado, winfo_exists guards"
 }

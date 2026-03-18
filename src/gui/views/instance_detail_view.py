@@ -876,6 +876,8 @@ class InstanceDetailView(ctk.CTkFrame):
         threading.Thread(target=search, daemon=True).start()
 
     def _display_modpack_results(self, results: List[Dict]) -> None:
+        if not self.winfo_exists():
+            return
         for w in self._mp_results_container.winfo_children():
             w.destroy()
 
@@ -959,7 +961,9 @@ class InstanceDetailView(ctk.CTkFrame):
             hover_color=COLORS["accent_dim"],
             text_color="#000000",
             corner_radius=8,
-            command=lambda p=pack, b=None: self._on_modpack_install(p, install_btn),
+        )
+        install_btn.configure(
+            command=lambda p=pack, b=install_btn: self._on_modpack_install(p, b),
         )
         install_btn.grid(row=0, column=2, rowspan=2, padx=(8, 12), pady=8)
 
