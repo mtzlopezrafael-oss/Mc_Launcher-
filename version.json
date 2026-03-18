@@ -1,5 +1,5 @@
 {
-  "version": "3.1.0",
+  "version": "3.1.1",
   "download_url": "https://github.com/mtzlopezrafael-oss/Mc_Launcher-/archive/refs/heads/main.zip",
-  "changelog": "Boton Playing mientras Minecraft esta abierto, terminal integrada en Logs"
+  "changelog": "Auditoria completa: fix NameError en RAM fallback, seguridad ZIP/mods, proteccion widgets destruidos"
 }

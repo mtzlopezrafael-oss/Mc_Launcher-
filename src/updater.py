@@ -161,6 +161,10 @@ def apply_update(
         extract_dir.mkdir(exist_ok=True)
 
         with zipfile.ZipFile(zip_path, "r") as zf:
+            # Validar que no haya path traversal en el ZIP
+            for info in zf.infolist():
+                if ".." in info.filename or info.filename.startswith("/"):
+                    return False
             zf.extractall(extract_dir)
 
         # El ZIP de GitHub tiene un directorio raíz (p. ej. "launcher-main/")
@@ -197,7 +201,10 @@ def _copy_tree(
         if item.name.startswith("."):
             continue  # Ignorar .git, .gitignore, etc.
 
-        dest = dst / rel
+        dest = (dst / rel).resolve()
+        # Proteger contra path traversal
+        if not str(dest).startswith(str(dst.resolve())):
+            continue
         if item.is_dir():
             dest.mkdir(parents=True, exist_ok=True)
         else:

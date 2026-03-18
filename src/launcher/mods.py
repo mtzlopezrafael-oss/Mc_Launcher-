@@ -274,7 +274,10 @@ def download_mod(
     dest_dir.mkdir(parents=True, exist_ok=True)
     # Sanitizar filename: solo usar el nombre base, sin rutas relativas (../exploit)
     safe_filename = Path(filename).name
-    if not safe_filename or safe_filename in (".", ".."):
+    if not safe_filename or safe_filename in (".", "..") or len(safe_filename) > 255:
+        safe_filename = "mod.jar"
+    # Rechazar caracteres de control
+    if any(ord(c) < 32 for c in safe_filename):
         safe_filename = "mod.jar"
     dest = dest_dir / safe_filename
 

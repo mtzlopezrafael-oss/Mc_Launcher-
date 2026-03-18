@@ -238,7 +238,7 @@ class NewProfileDialog(_BaseDialog):
             parts = ram_label.split()
             ram_mb = int(parts[0]) * 1024 if "GB" in ram_label else int(parts[0])
         except (IndexError, ValueError):
-            ram_mb = config.DEFAULT_RAM_MB
+            ram_mb = DEFAULT_RAM_MB
 
         data = {
             "name":           name,

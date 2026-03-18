@@ -68,7 +68,7 @@ class MainWindow(ctk.CTk):
     Layout: Sidebar (230px) | Content (flexible) | Bottom Bar (80px)
     """
 
-    APP_VERSION = "3.1.0"
+    APP_VERSION = "3.1.1"
     WINDOW_WIDTH = 1100
     WINDOW_HEIGHT = 680
     SIDEBAR_WIDTH = 230
@@ -416,6 +416,8 @@ class MainWindow(ctk.CTk):
         threading.Thread(target=check, daemon=True).start()
 
     def _update_java_status_ui(self):
+        if not self.winfo_exists():
+            return
         if self._java_status["found"]:
             ver = self._java_status["version"] or "?"
             self._java_label.configure(
@@ -771,6 +773,8 @@ class MainWindow(ctk.CTk):
 
     def _on_game_exited(self):
         """Minecraft se cerró — restaurar botón de Play."""
+        if not self.winfo_exists():
+            return
         self._is_launching = False
         self._play_button.set_playing(False)
 
@@ -788,6 +792,8 @@ class MainWindow(ctk.CTk):
         def _reader():
             try:
                 for raw_line in process.stdout:
+                    if not self.winfo_exists():
+                        break
                     try:
                         line = raw_line.decode("utf-8", errors="replace").rstrip()
                     except Exception:
@@ -805,7 +811,7 @@ class MainWindow(ctk.CTk):
                     try:
                         self.after(0, lambda m=line, l=lvl: self.log(f"[MC] {m}", l))
                     except Exception:
-                        pass
+                        break
                 # Proceso terminó
                 retcode = process.wait()
                 try:

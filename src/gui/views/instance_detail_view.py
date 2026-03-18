@@ -11,7 +11,7 @@ import customtkinter as ctk
 from src.gui.components import COLORS, ModCard, DropdownSelector, SearchBar
 from src.utils import profiles
 from src.utils.config import (
-    RAM_OPTIONS_MB, format_ram_label, MINECRAFT_DIR,
+    RAM_OPTIONS_MB, DEFAULT_RAM_MB, format_ram_label, MINECRAFT_DIR,
 )
 from src.launcher.mods import (
     search_modrinth, search_curseforge,
@@ -451,7 +451,7 @@ class InstanceDetailView(ctk.CTkFrame):
             parts = rl.split()
             rm = int(parts[0]) * 1024 if "GB" in rl else int(parts[0])
         except (IndexError, ValueError):
-            rm = config.DEFAULT_RAM_MB
+            rm = DEFAULT_RAM_MB
         gd = self._dir_path[0] or self._profile.get("game_dir", "")
 
         profiles.update(self._profile["id"], name=n, username=u, ram_mb=rm, game_dir=gd)
