@@ -3,6 +3,7 @@ from __future__ import annotations
 """Vista de detalle de instancia — pestaña General (edición) y Mods."""
 
 import threading
+import urllib.request
 from pathlib import Path
 from typing import Dict, List, Optional, TYPE_CHECKING
 
@@ -17,6 +18,11 @@ from src.launcher.mods import (
     search_modrinth, search_curseforge,
     get_modrinth_download, get_curseforge_download,
     download_mod, uninstall_mod,
+)
+from src.launcher.modpacks import (
+    search_modpacks_modrinth, search_modpacks_curseforge,
+    get_modpack_download_modrinth, get_modpack_download_curseforge,
+    install_modpack,
 )
 
 try:
@@ -106,9 +112,11 @@ class InstanceDetailView(ctk.CTkFrame):
 
         self._tabs.add("General")
         self._tabs.add("Mods")
+        self._tabs.add("Modpacks")
 
         self._build_general_tab(self._tabs.tab("General"))
         self._build_mods_tab(self._tabs.tab("Mods"))
+        self._build_modpacks_tab(self._tabs.tab("Modpacks"))
 
     # ── Pestaña General ────────────────────────────────────────────
 
@@ -747,3 +755,341 @@ class InstanceDetailView(ctk.CTkFrame):
                 pass
 
         threading.Thread(target=install, daemon=True).start()
+
+    # ══════════════════════════════════════════════════════════════
+    #  PESTAÑA MODPACKS
+    # ══════════════════════════════════════════════════════════════
+
+    def _build_modpacks_tab(self, tab: ctk.CTkFrame) -> None:
+        tab.columnconfigure(0, weight=1)
+        tab.rowconfigure(1, weight=1)
+
+        # ── Controles de búsqueda ──
+        controls = ctk.CTkFrame(tab, fg_color=COLORS["panel"], corner_radius=12)
+        controls.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 4))
+
+        ctrl_row = ctk.CTkFrame(controls, fg_color="transparent")
+        ctrl_row.pack(fill="x", padx=12, pady=10)
+
+        ctk.CTkLabel(
+            ctrl_row, text="Fuente:",
+            font=ctk.CTkFont(size=12), text_color=COLORS["text_dim"],
+        ).pack(side="left")
+        self._mp_source = DropdownSelector(
+            ctrl_row, values=["Modrinth", "CurseForge", "Ambos"],
+            default="Modrinth", width=120,
+        )
+        self._mp_source.pack(side="left", padx=(6, 12))
+
+        ctk.CTkLabel(
+            ctrl_row, text="Loader:",
+            font=ctk.CTkFont(size=12), text_color=COLORS["text_dim"],
+        ).pack(side="left")
+        self._mp_loader_filter = DropdownSelector(
+            ctrl_row, values=["Auto", "Fabric", "Forge", "NeoForge", "Quilt"],
+            default="Auto", width=100,
+        )
+        self._mp_loader_filter.pack(side="left", padx=(6, 12))
+
+        self._mp_search_bar = SearchBar(
+            ctrl_row, placeholder="Buscar modpacks...",
+            on_search=self._on_modpack_search, width=220,
+        )
+        self._mp_search_bar.pack(side="left", fill="x", expand=True)
+
+        # ── Área de resultados ──
+        self._mp_results_scroll = ctk.CTkScrollableFrame(
+            tab, fg_color="transparent",
+            scrollbar_button_color=COLORS["panel_light"],
+            scrollbar_button_hover_color=COLORS["border"],
+        )
+        self._mp_results_scroll.grid(row=1, column=0, sticky="nsew", padx=8, pady=(4, 8))
+
+        self._mp_results_container = ctk.CTkFrame(
+            self._mp_results_scroll, fg_color="transparent",
+        )
+        self._mp_results_container.pack(fill="both", expand=True)
+
+        ctk.CTkLabel(
+            self._mp_results_container,
+            text="🔍  Busca modpacks para instalarlos en esta instancia",
+            font=ctk.CTkFont(size=13), text_color=COLORS["text_dim"],
+        ).pack(pady=60)
+
+        # ── Barra de progreso de instalación (oculta por defecto) ──
+        self._mp_progress_frame = ctk.CTkFrame(tab, fg_color=COLORS["panel"], corner_radius=12)
+
+        self._mp_progress_label = ctk.CTkLabel(
+            self._mp_progress_frame, text="",
+            font=ctk.CTkFont(size=12), text_color=COLORS["text"],
+        )
+        self._mp_progress_label.pack(padx=12, pady=(8, 2))
+
+        self._mp_progress_bar = ctk.CTkProgressBar(
+            self._mp_progress_frame,
+            fg_color=COLORS["panel_light"],
+            progress_color=COLORS["accent"],
+            height=8,
+        )
+        self._mp_progress_bar.pack(fill="x", padx=12, pady=(2, 8))
+        self._mp_progress_bar.set(0)
+
+    # ── Búsqueda de modpacks ──
+
+    def _on_modpack_search(self, query: str) -> None:
+        if not query.strip():
+            return
+
+        for w in self._mp_results_container.winfo_children():
+            w.destroy()
+        ctk.CTkLabel(
+            self._mp_results_container, text="🔄  Buscando modpacks...",
+            font=ctk.CTkFont(size=13), text_color=COLORS["text_dim"],
+        ).pack(pady=40)
+
+        def search() -> None:
+            results: List[Dict] = []
+            source = self._mp_source.get()
+            loader_val = self._mp_loader_filter.get()
+
+            if loader_val == "Auto":
+                loader = (self._profile.get("loader") if self._profile else None)
+                loader = loader.lower() if loader and loader != "vanilla" else None
+            else:
+                loader = loader_val.lower()
+
+            mc_ver = self._profile.get("mc_version", "1.21") if self._profile else "1.21"
+
+            try:
+                if source in ("Modrinth", "Ambos"):
+                    results.extend(search_modpacks_modrinth(query, mc_ver, loader))
+                if source in ("CurseForge", "Ambos"):
+                    results.extend(search_modpacks_curseforge(query, mc_ver, loader))
+            except Exception as e:
+                self.app.log(f"Error buscando modpacks: {e}", "error")
+
+            try:
+                self.after(0, lambda: self._display_modpack_results(results))
+            except Exception:
+                pass
+
+        threading.Thread(target=search, daemon=True).start()
+
+    def _display_modpack_results(self, results: List[Dict]) -> None:
+        for w in self._mp_results_container.winfo_children():
+            w.destroy()
+
+        if not results:
+            ctk.CTkLabel(
+                self._mp_results_container, text="😔  No se encontraron modpacks",
+                font=ctk.CTkFont(size=13), text_color=COLORS["text_dim"],
+            ).pack(pady=40)
+            return
+
+        for pack in results[:20]:
+            self._build_modpack_card(pack)
+
+        self.app.log(f"Se encontraron {len(results)} modpacks", "success")
+
+    def _build_modpack_card(self, pack: Dict) -> None:
+        """Construye una tarjeta visual para un modpack."""
+        card = ctk.CTkFrame(
+            self._mp_results_container,
+            fg_color=COLORS["panel"],
+            corner_radius=10,
+        )
+        card.pack(fill="x", pady=4)
+        card.columnconfigure(1, weight=1)
+
+        # Icono placeholder
+        icon_label = ctk.CTkLabel(
+            card, text="📦", font=ctk.CTkFont(size=24),
+            width=50, height=50,
+        )
+        icon_label.grid(row=0, column=0, rowspan=2, padx=(12, 8), pady=8)
+
+        # Cargar icono real en background
+        icon_url = pack.get("icon_url", "")
+        if icon_url:
+            threading.Thread(
+                target=self._load_modpack_icon,
+                args=(icon_url, icon_label),
+                daemon=True,
+            ).start()
+
+        # Título
+        ctk.CTkLabel(
+            card, text=pack.get("title", ""),
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color=COLORS["text"], anchor="w",
+        ).grid(row=0, column=1, sticky="w", pady=(8, 0))
+
+        # Descripción
+        desc = pack.get("description", "")[:100]
+        if len(pack.get("description", "")) > 100:
+            desc += "..."
+        ctk.CTkLabel(
+            card, text=desc,
+            font=ctk.CTkFont(size=11),
+            text_color=COLORS["text_dim"], anchor="w",
+            wraplength=350,
+        ).grid(row=1, column=1, sticky="w", pady=(0, 2))
+
+        # Info: autor + descargas
+        info_frame = ctk.CTkFrame(card, fg_color="transparent")
+        info_frame.grid(row=2, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 4))
+
+        dl_count = pack.get("downloads", 0)
+        dl_text = f"{dl_count/1_000_000:.1f}M" if dl_count >= 1_000_000 else (
+            f"{dl_count/1_000:.0f}K" if dl_count >= 1_000 else str(dl_count))
+
+        source_label = "MR" if pack.get("source") == "modrinth" else "CF"
+        ctk.CTkLabel(
+            info_frame,
+            text=f"{source_label}  •  {pack.get('author', '?')}  •  {dl_text} descargas",
+            font=ctk.CTkFont(size=10), text_color=COLORS["text_dim"],
+        ).pack(side="left")
+
+        # Botón Instalar
+        install_btn = ctk.CTkButton(
+            card, text="Instalar",
+            width=100, height=32,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color=COLORS["accent"],
+            hover_color=COLORS["accent_dim"],
+            text_color="#000000",
+            corner_radius=8,
+            command=lambda p=pack, b=None: self._on_modpack_install(p, install_btn),
+        )
+        install_btn.grid(row=0, column=2, rowspan=2, padx=(8, 12), pady=8)
+
+    def _load_modpack_icon(self, url: str, label: ctk.CTkLabel) -> None:
+        """Descarga y muestra el icono de un modpack."""
+        try:
+            from PIL import Image
+            import io
+            req = urllib.request.Request(url, headers={"User-Agent": "CTK-Launcher/3.0"})
+            with urllib.request.urlopen(req, timeout=5) as r:
+                data = r.read()
+            img = Image.open(io.BytesIO(data)).convert("RGBA")
+            img = img.resize((50, 50), Image.LANCZOS)
+            bg = Image.new("RGB", img.size, (19, 19, 42))
+            bg.paste(img, mask=img.split()[3] if img.mode == "RGBA" else None)
+            ctk_img = ctk.CTkImage(bg, size=(50, 50))
+            # Mantener referencia para evitar garbage collection
+            if not hasattr(self, '_mp_icon_refs'):
+                self._mp_icon_refs = []
+            self._mp_icon_refs.append(ctk_img)
+            try:
+                self.after(0, lambda: label.configure(image=ctk_img, text=""))
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    # ── Instalación de modpack ──
+
+    def _on_modpack_install(self, pack: Dict, btn: ctk.CTkButton) -> None:
+        if not self._profile:
+            self.app.log("No hay perfil cargado", "error")
+            return
+
+        name = pack.get("title", "Modpack")
+        source = pack.get("source", "modrinth")
+        btn.configure(text="Instalando...", state="disabled")
+
+        # Mostrar barra de progreso
+        self._mp_progress_frame.grid(row=2, column=0, sticky="ew", padx=8, pady=(0, 8))
+        self._mp_progress_label.configure(text=f"Preparando {name}...")
+        self._mp_progress_bar.set(0)
+
+        self.app.log(f"Instalando modpack: {name}...")
+
+        def install() -> None:
+            mc_ver = self._profile.get("mc_version", "1.21") if self._profile else "1.21"
+            loader_val = self._mp_loader_filter.get()
+            if loader_val == "Auto":
+                loader = (self._profile.get("loader") if self._profile else None)
+                loader = loader.lower() if loader and loader != "vanilla" else None
+            else:
+                loader = loader_val.lower()
+
+            # Obtener URL de descarga
+            try:
+                if source == "curseforge":
+                    dl_info = get_modpack_download_curseforge(pack.get("id"), mc_ver, loader)
+                else:
+                    dl_info = get_modpack_download_modrinth(pack.get("id"), mc_ver, loader)
+            except Exception as e:
+                self.app.log(f"Error obteniendo descarga: {e}", "error")
+                try:
+                    self.after(0, lambda: self._mp_install_done(btn, False, name))
+                except Exception:
+                    pass
+                return
+
+            if not dl_info:
+                self.app.log(f"No hay versión compatible de {name} para este perfil", "warning")
+                try:
+                    self.after(0, lambda: self._mp_install_done(btn, False, name))
+                except Exception:
+                    pass
+                return
+
+            dl_url, filename, version_name = dl_info
+            self.app.log(f"Versión: {version_name}")
+
+            # Directorio de la instancia
+            instance_dir = Path(
+                self._profile.get("game_dir", "") or str(MINECRAFT_DIR)
+            )
+
+            def progress(stage: str, current: int, total: int):
+                if total <= 0:
+                    return
+                pct = current / total
+                if stage == "download":
+                    msg = f"Descargando... {int(pct * 100)}%"
+                else:
+                    msg = f"Instalando mods... {current}/{total}"
+                try:
+                    self.after(0, lambda m=msg, p=pct: self._mp_update_progress(m, p))
+                except Exception:
+                    pass
+
+            def log_msg(msg: str):
+                self.app.log(f"[Modpack] {msg}")
+
+            ok = install_modpack(
+                download_url=dl_url,
+                filename=filename,
+                instance_dir=instance_dir,
+                source=source,
+                progress_cb=progress,
+                log_cb=log_msg,
+            )
+
+            try:
+                self.after(0, lambda: self._mp_install_done(btn, ok, name))
+            except Exception:
+                pass
+
+        threading.Thread(target=install, daemon=True).start()
+
+    def _mp_update_progress(self, msg: str, pct: float) -> None:
+        if not self.winfo_exists():
+            return
+        self._mp_progress_label.configure(text=msg)
+        self._mp_progress_bar.set(pct)
+
+    def _mp_install_done(self, btn: ctk.CTkButton, success: bool, name: str) -> None:
+        if not self.winfo_exists():
+            return
+        self._mp_progress_frame.grid_forget()
+        if success:
+            btn.configure(text="✓ Instalado", fg_color=COLORS["success"], state="disabled")
+            self.app.log(f"✓ Modpack instalado: {name}", "success")
+            self._refresh_installed_mods()
+        else:
+            btn.configure(text="Instalar", state="normal")
+            self.app.log(f"Error instalando modpack: {name}", "error")

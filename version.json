@@ -1,5 +1,5 @@
 {
-  "version": "3.1.1",
+  "version": "3.2.0",
   "download_url": "https://github.com/mtzlopezrafael-oss/Mc_Launcher-/archive/refs/heads/main.zip",
-  "changelog": "Auditoria completa: fix NameError en RAM fallback, seguridad ZIP/mods, proteccion widgets destruidos"
+  "changelog": "Nueva funcionalidad: instalacion de modpacks desde Modrinth y CurseForge dentro de cada instancia"
 }
