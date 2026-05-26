@@ -719,7 +719,7 @@ class MainWindow(ctk.CTk):
             try:
                 self.after(0, self._on_launch_complete)
                 # Cambiar a pestaña de Logs para ver la salida del juego
-                self.after(0, lambda: self._navigate("log"))
+                self.after(0, lambda: self._on_nav_click("log"))
             except Exception:
                 pass
 

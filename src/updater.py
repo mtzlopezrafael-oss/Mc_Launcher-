@@ -270,7 +270,7 @@ def download_and_run_installer(
 
         if file_size < 100_000:
             # Un instalador real no pesa menos de 100KB — probablemente es un 404 HTML
-            log.error("Archivo descargado muy pequeno (%d bytes), posible error", file_size)
+            log.error("Archivo descargado muy pequeño (%d bytes), posible error", file_size)
             try:
                 os.unlink(tmp_path)
             except OSError:

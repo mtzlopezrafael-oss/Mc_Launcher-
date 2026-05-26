@@ -977,7 +977,8 @@ class InstanceDetailView(ctk.CTkFrame):
                 data = r.read()
             img = Image.open(io.BytesIO(data)).convert("RGBA")
             img = img.resize((50, 50), Image.LANCZOS)
-            bg = Image.new("RGB", img.size, (19, 19, 42))
+            from src.gui.components import _hex_to_rgb
+            bg = Image.new("RGB", img.size, _hex_to_rgb(COLORS["panel_light"]))
             bg.paste(img, mask=img.split()[3] if img.mode == "RGBA" else None)
             ctk_img = ctk.CTkImage(bg, size=(50, 50))
             # Mantener referencia para evitar garbage collection

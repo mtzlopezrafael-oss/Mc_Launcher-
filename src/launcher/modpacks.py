@@ -23,7 +23,7 @@ import urllib.request
 import urllib.parse
 import zipfile
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.utils.config import (
     MODRINTH_API, CURSEFORGE_API,
@@ -66,7 +66,7 @@ def _is_valid_api_key(key: str) -> bool:
     return bool(key) and bool(_VALID_HEADER_RE.match(key))
 
 
-def _get(url: str, headers: dict, timeout: int = _TIMEOUT) -> Optional[any]:
+def _get(url: str, headers: dict, timeout: int = _TIMEOUT) -> Optional[Any]:
     """GET request genérico con manejo de errores."""
     try:
         req = urllib.request.Request(url, headers=headers)

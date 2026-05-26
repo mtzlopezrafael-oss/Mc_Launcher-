@@ -16,17 +16,7 @@ from typing import Callable, Optional, Dict, Any, List
 # fallback local definido abajo — eliminar el fallback cuando el import funcione.
 try:
     from src.utils.config import COLORS, LOADER_COLORS
-    from src.launcher.mods import format_downloads as _format_downloads
 except ImportError:
-    _format_downloads = None  # fallback definido en ModCard._format_downloads
-
-# Iconos PNG — importación opcional: si no están disponibles se degradan
-# de forma elegante usando los emojis / textos de respaldo ya existentes.
-try:
-    from src.gui.icons import get as _ico
-except ImportError:
-    def _ico(name, size=(18, 18)):  # type: ignore[misc]
-        return None
     # Fallback para ejecución aislada / tests
     COLORS = {
         "bg":          "#f0f1f5",
@@ -50,6 +40,28 @@ except ImportError:
         "forge":    "#c05820",
         "neoforge": "#c06800",
     }
+
+try:
+    from src.launcher.mods import format_downloads as _format_downloads
+except ImportError:
+    _format_downloads = None  # fallback definido en ModCard._format_downloads
+
+# Iconos PNG — importación opcional: si no están disponibles se degradan
+# de forma elegante usando los emojis / textos de respaldo ya existentes.
+try:
+    from src.gui.icons import get as _ico
+except ImportError:
+    def _ico(name, size=(18, 18)):  # type: ignore[misc]
+        return None
+
+
+def _hex_to_rgb(hex_color: str) -> tuple:
+    """Convierte '#rrggbb' a (r, g, b). Devuelve gris medio si el formato es inválido."""
+    try:
+        h = hex_color.lstrip("#")
+        return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+    except Exception:
+        return (20, 20, 20)
 
 
 # FIX-F: Función helper requerida por ToggleSwitch para obtener el tk.Tk raíz
@@ -869,8 +881,8 @@ class ModCard(ctk.CTkFrame):
                 data = r.read()
             img = Image.open(io.BytesIO(data)).convert("RGBA")
             img = img.resize((50, 50), Image.LANCZOS)
-            # Convertir RGBA a RGB con fondo oscuro
-            bg = Image.new("RGB", img.size, (19, 19, 42))  # color panel_light
+            # Convertir RGBA a RGB usando el color de fondo del tema activo
+            bg = Image.new("RGB", img.size, _hex_to_rgb(COLORS["panel_light"]))
             bg.paste(img, mask=img.split()[3] if img.mode == "RGBA" else None)
             ctk_img = ctk.CTkImage(bg, size=(50, 50))
             self._icon_ctk_image = ctk_img  # mantener referencia
