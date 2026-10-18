@@ -9,7 +9,7 @@ CurseForge: API key embebida en config.CURSEFORGE_API_KEY (igual que Prism Launc
 """
 
 import json
-import urllib.request
+import logging
 import urllib.parse
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -17,53 +17,16 @@ from typing import Dict, List, Optional, Tuple
 from src.utils.config import (
     MODRINTH_API, CURSEFORGE_API,
     CURSEFORGE_GAME_ID, CURSEFORGE_CLASS_MODS, CURSEFORGE_LOADER_MAP,
-    CURSEFORGE_API_KEY,
+)
+from src.utils.net import (
+    JSON_HEADERS, cf_headers, resolve_cf_key, get_json, download_file, safe_filename,
 )
 
-# OPT-003: User-Agent limpio (sin URL placeholder inexistente)
-_HEADERS_MODRINTH = {
-    "User-Agent": "CustomTK-Minecraft-Launcher/3.0",
-    "Accept":     "application/json",
-}
+_log = logging.getLogger("launcher.mods")
 
-# Headers para CurseForge — añade x-api-key dinámicamente en cada llamada
-_HEADERS_CF_BASE = {
-    "User-Agent": "CustomTK-Minecraft-Launcher/3.0",
-    "Accept":     "application/json",
-}
-
-_TIMEOUT = 8
-
-# Caracteres válidos en un HTTP header value: ASCII imprimible, sin newlines ni CR
-import re as _re
-_VALID_HEADER_RE = _re.compile(r'^[\x20-\x7E]+$')
-
-
-def _is_valid_api_key(key: str) -> bool:
-    """
-    Valida que la API key sea un string de una sola línea con caracteres ASCII
-    imprimibles. Rechaza keys corruptas (p. ej. output de terminal pegado por error).
-    """
-    if not key or not isinstance(key, str):
-        return False
-    key = key.strip()
-    return bool(key) and bool(_VALID_HEADER_RE.match(key))
-
-
-def _get(url: str, headers: Dict = None, timeout: int = _TIMEOUT) -> Optional[Dict]:
-    try:
-        req = urllib.request.Request(url, headers=headers or {})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return json.loads(r.read().decode("utf-8"))
-    except Exception as e:
-        import sys
-        import urllib.error as _ue
-        short = url.split("?")[0]
-        if isinstance(e, _ue.HTTPError):
-            print(f"[mods._get] HTTP {e.code} en {short} — {e.reason}", file=sys.stderr)
-        else:
-            print(f"[mods._get] {e.__class__.__name__} en {short}: {e}", file=sys.stderr)
-        return None
+# Alias conservados por compatibilidad con el resto del módulo
+_HEADERS_MODRINTH = JSON_HEADERS
+_get = get_json
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -157,15 +120,6 @@ def get_modrinth_download(
 # CURSEFORGE
 # ══════════════════════════════════════════════════════════════════════════
 
-def _resolve_cf_key(api_key: Optional[str]) -> str:
-    """
-    Devuelve la API key a usar: el argumento explícito (si válido) o la
-    key embebida en CURSEFORGE_API_KEY.  Retorna "" si ninguna es válida.
-    """
-    candidate = api_key if api_key is not None else CURSEFORGE_API_KEY
-    return candidate.strip() if _is_valid_api_key(candidate) else ""
-
-
 def search_curseforge(
     query: str,
     mc_version: str,
@@ -179,11 +133,10 @@ def search_curseforge(
     Retorna lista normalizada con los mismos keys que Modrinth.
     """
     # Resolver la key (argumento explícito → embedded fallback)
-    api_key = _resolve_cf_key(api_key)
+    api_key = resolve_cf_key(api_key)
     if not api_key:
-        import sys
-        print("[mods] CurseForge API key no configurada. "
-              "Rellena CURSEFORGE_API_KEY en src/utils/config.py.", file=sys.stderr)
+        _log.error("CurseForge API key no configurada. "
+                   "Rellena CURSEFORGE_API_KEY en src/utils/config.py.")
         return []
 
     loader_type = CURSEFORGE_LOADER_MAP.get(loader, 0)
@@ -201,7 +154,7 @@ def search_curseforge(
         params["modLoaderType"] = loader_type
 
     url = f"{CURSEFORGE_API}/mods/search?" + urllib.parse.urlencode(params)
-    headers = {**_HEADERS_CF_BASE, "x-api-key": api_key}
+    headers = cf_headers(api_key)
     data = _get(url, headers=headers)
     if not data:
         return []
@@ -231,7 +184,7 @@ def get_curseforge_download(
     api_key: Optional[str] = None,
 ) -> Optional[Tuple[str, str]]:
     """Retorna (download_url, filename) del archivo más reciente compatible."""
-    api_key = _resolve_cf_key(api_key)
+    api_key = resolve_cf_key(api_key)
     if not api_key:
         return None
 
@@ -241,7 +194,7 @@ def get_curseforge_download(
         params["modLoaderType"] = loader_type
 
     url = f"{CURSEFORGE_API}/mods/{mod_id}/files?" + urllib.parse.urlencode(params)
-    headers = {**_HEADERS_CF_BASE, "x-api-key": api_key}
+    headers = cf_headers(api_key)
     data = _get(url, headers=headers)
     if not data:
         return None
@@ -271,36 +224,9 @@ def download_mod(
     Descarga un archivo de mod a dest_dir/filename.
     progress_cb(downloaded_bytes, total_bytes) opcional.
     """
-    dest_dir.mkdir(parents=True, exist_ok=True)
     # Sanitizar filename: solo usar el nombre base, sin rutas relativas (../exploit)
-    safe_filename = Path(filename).name
-    if not safe_filename or safe_filename in (".", "..") or len(safe_filename) > 255:
-        safe_filename = "mod.jar"
-    # Rechazar caracteres de control
-    if any(ord(c) < 32 for c in safe_filename):
-        safe_filename = "mod.jar"
-    dest = dest_dir / safe_filename
-
-    try:
-        req = urllib.request.Request(url, headers=_HEADERS_MODRINTH)
-        with urllib.request.urlopen(req, timeout=30) as r:
-            total = int(r.headers.get("Content-Length", 0))
-            downloaded = 0
-            chunk = 8192
-            with open(dest, "wb") as f:
-                while True:
-                    data = r.read(chunk)
-                    if not data:
-                        break
-                    f.write(data)
-                    downloaded += len(data)
-                    if progress_cb and total:
-                        progress_cb(downloaded, total)
-        return True
-    except Exception as e:
-        if dest.exists():
-            dest.unlink()
-        return False
+    dest = Path(dest_dir) / safe_filename(filename)
+    return download_file(url, dest, progress_cb=progress_cb, timeout=30)
 
 
 def get_installed_mods(mods_dir: Path) -> List[str]:
@@ -315,7 +241,7 @@ def get_installed_mods(mods_dir: Path) -> List[str]:
 
 def uninstall_mod(mods_dir: Path, filename: str) -> bool:
     """Elimina un mod instalado."""
-    target = mods_dir / filename
+    target = mods_dir / safe_filename(filename)
     try:
         if target.exists():
             target.unlink()

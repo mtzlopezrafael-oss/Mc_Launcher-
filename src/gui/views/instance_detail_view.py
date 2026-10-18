@@ -380,7 +380,8 @@ class InstanceDetailView(ctk.CTkFrame):
         self._user_entry.insert(0, profile.get("username", "Player"))
 
         self._mc_ver_label.configure(text=mc_ver)
-        self._loader_label.configure(text=f"{loader}  {profile.get('loader_version', '')}")
+        # loader_version puede ser None (se guarda así para "última versión")
+        self._loader_label.configure(text=f"{loader}  {profile.get('loader_version') or ''}")
 
         self._ram_option.set(format_ram_label(profile.get("ram_mb", 4096)))
 
@@ -880,6 +881,8 @@ class InstanceDetailView(ctk.CTkFrame):
             return
         for w in self._mp_results_container.winfo_children():
             w.destroy()
+        # Las tarjetas anteriores ya no existen: soltar sus iconos
+        self._mp_icon_refs = []
 
         if not results:
             ctk.CTkLabel(
@@ -958,8 +961,8 @@ class InstanceDetailView(ctk.CTkFrame):
             width=100, height=32,
             font=ctk.CTkFont(size=12, weight="bold"),
             fg_color=COLORS["accent"],
-            hover_color=COLORS["accent_dim"],
-            text_color="#000000",
+            hover_color=COLORS["accent2"],
+            text_color="#ffffff",
             corner_radius=8,
         )
         install_btn.configure(
@@ -1009,6 +1012,8 @@ class InstanceDetailView(ctk.CTkFrame):
         self._mp_progress_bar.set(0)
 
         self.app.log(f"Instalando modpack: {name}...")
+        # El usuario puede abrir otra instancia mientras se instala
+        profile_id = self._profile["id"]
 
         def install() -> None:
             mc_ver = self._profile.get("mc_version", "1.21") if self._profile else "1.21"
@@ -1065,6 +1070,12 @@ class InstanceDetailView(ctk.CTkFrame):
             def log_msg(msg: str):
                 self.app.log(f"[Modpack] {msg}")
 
+            def on_requirements(req: Dict) -> None:
+                try:
+                    self.after(0, lambda r=req: self._apply_modpack_requirements(profile_id, r))
+                except Exception:
+                    pass
+
             ok = install_modpack(
                 download_url=dl_url,
                 filename=filename,
@@ -1072,6 +1083,7 @@ class InstanceDetailView(ctk.CTkFrame):
                 source=source,
                 progress_cb=progress,
                 log_cb=log_msg,
+                on_requirements=on_requirements,
             )
 
             try:
@@ -1080,6 +1092,42 @@ class InstanceDetailView(ctk.CTkFrame):
                 pass
 
         threading.Thread(target=install, daemon=True).start()
+
+    def _apply_modpack_requirements(self, profile_id: str, req: Dict) -> None:
+        """
+        Ajusta versión de Minecraft y loader del perfil a lo que pide el
+        modpack; sin esto el modpack se lanzaría con la versión equivocada.
+        """
+        changes = {
+            "mc_version":     req.get("mc_version"),
+            "loader":         req.get("loader") or "vanilla",
+            "loader_version": req.get("loader_version"),
+        }
+        if not changes["mc_version"]:
+            return
+        prof = profiles.get(profile_id)
+        if prof is None:
+            return
+        if all(prof.get(k) == v for k, v in changes.items()):
+            return
+
+        profiles.update(profile_id, **changes)
+        self.app.log(
+            f"Perfil ajustado al modpack: MC {changes['mc_version']} • "
+            f"{changes['loader'].capitalize()} {changes['loader_version'] or ''}".rstrip(),
+            "success",
+        )
+        if self._profile and self._profile.get("id") == profile_id:
+            self._profile.update(changes)
+            loader = changes["loader"].capitalize()
+            self._version_badge.configure(text=f"MC {changes['mc_version']}  •  {loader}")
+            self._mc_ver_label.configure(text=changes["mc_version"])
+            self._loader_label.configure(text=f"{loader}  {changes['loader_version'] or ''}")
+        try:
+            self.app._home_view.refresh()
+            self.app._update_bottom_bar_info()
+        except Exception:
+            pass
 
     def _mp_update_progress(self, msg: str, pct: float) -> None:
         if not self.winfo_exists():
