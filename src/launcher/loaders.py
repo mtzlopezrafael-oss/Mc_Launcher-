@@ -108,7 +108,7 @@ def install(
         if "wrong Checksum" in err_str or "Checksum" in err_str:
             # Intentar limpiar y reintentar una vez
             if log:
-                log(f"⚠️ Checksum inválido detectado. Limpiando archivos corruptos y reintentando...")
+                log("⚠️ Checksum inválido detectado. Limpiando archivos corruptos y reintentando...")
             removed2 = purge_empty_jars(mc_dir)
             if log:
                 log(f"🧹 Eliminados {removed2} archivos corruptos.")

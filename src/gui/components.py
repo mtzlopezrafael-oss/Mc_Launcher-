@@ -139,6 +139,7 @@ class AvatarWidget(ctk.CTkFrame):
         # Placeholder creado antes del label para tener una imagen lista
         self._placeholder = self._create_placeholder()
         self._avatar_image = None
+        self._generation = 0
 
         # Label interno que muestra la imagen (evita bug fg_color en CTkLabel)
         self._img_label = ctk.CTkLabel(
@@ -166,10 +167,11 @@ class AvatarWidget(ctk.CTkFrame):
         )
         return ctk.CTkImage(light_image=img, dark_image=img, size=(self.size, self.size))
 
-    def _load_avatar(self):
+    def _load_avatar(self, generation: int = 0):
         """Descarga el avatar desde mc-heads.net (se ejecuta en thread)."""
         try:
-            url = f"https://mc-heads.net/avatar/{self.username}/{self.size * 2}"
+            from urllib.parse import quote
+            url = f"https://mc-heads.net/avatar/{quote(self.username, safe='')}/{self.size * 2}"
             with urllib.request.urlopen(url, timeout=3) as response:
                 data = response.read()
             img = Image.open(io.BytesIO(data))
@@ -178,12 +180,15 @@ class AvatarWidget(ctk.CTkFrame):
                 dark_image=img,
                 size=(self.size, self.size)
             )
-            self._avatar_image = ctk_img  # mantener referencia
 
             # FIX-C: actualizar UI desde el hilo principal con self.after().
             # REGLA 5: NUNCA actualizar widgets directamente desde un Thread.
             def _update():
+                # Descartar respuestas de un username anterior que lleguen tarde
+                if generation != self._generation:
+                    return
                 try:
+                    self._avatar_image = ctk_img  # mantener referencia
                     self._img_label.configure(image=ctk_img)
                 except Exception:
                     pass  # Widget destruido — ignorar
@@ -195,9 +200,14 @@ class AvatarWidget(ctk.CTkFrame):
     def refresh(self, username: str = None):
         """Actualiza el avatar con un nuevo username."""
         if username:
+            if username == self.username and self._avatar_image is not None:
+                return  # mismo jugador: no volver a descargar
             self.username = username
+        self._generation += 1
+        self._avatar_image = None
         self._img_label.configure(image=self._placeholder)
-        threading.Thread(target=self._load_avatar, daemon=True).start()
+        threading.Thread(target=self._load_avatar, args=(self._generation,),
+                         daemon=True).start()
 
 
 # ---------------------------------------------------------------------------
@@ -563,6 +573,10 @@ class LogConsole(ctk.CTkFrame):
         self._textbox.pack(fill="both", expand=True, padx=12, pady=(0, 12))
         self._textbox.configure(state="disabled")
 
+        # Color por nivel (los mensajes "info" usan el color de texto normal)
+        for tag, color_key in (("error", "error"), ("warning", "warning"), ("success", "success")):
+            self._textbox.tag_config(tag, foreground=COLORS[color_key])
+
     def log(self, message: str, level: str = "info"):
         """Add a log message with optional level coloring."""
         from datetime import datetime
@@ -578,7 +592,8 @@ class LogConsole(ctk.CTkFrame):
         elif level == "success":
             prefix = "[OK] "
 
-        self._textbox.insert("end", f"[{timestamp}] {prefix}{message}\n")
+        tags = level if level in ("error", "warning", "success") else None
+        self._textbox.insert("end", f"[{timestamp}] {prefix}{message}\n", tags)
 
         # OPT-007: recortar líneas excedentes para no consumir memoria sin límite
         line_count = int(self._textbox.index("end-1c").split(".")[0])
@@ -853,8 +868,8 @@ class ModCard(ctk.CTkFrame):
             height=32,
             font=ctk.CTkFont(size=12, weight="bold"),
             fg_color=COLORS["accent"],
-            hover_color=COLORS["accent_dim"],
-            text_color="#000000",
+            hover_color=COLORS["accent2"],
+            text_color="#ffffff",
             command=self._handle_install,
             **_dl_kwargs,
         )
@@ -1108,8 +1123,8 @@ class SearchBar(ctk.CTkFrame):
             height=28,
             font=ctk.CTkFont(size=12),
             fg_color=COLORS["accent"],
-            hover_color=COLORS["accent_dim"],
-            text_color="#000000",
+            hover_color=COLORS["accent2"],
+            text_color="#ffffff",
             corner_radius=6,
             command=self._do_search
         )

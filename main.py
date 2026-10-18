@@ -1,12 +1,10 @@
-from __future__ import annotations
-
 """Entry point — parchea tkinter ANTES de importar customtkinter."""
+
+from __future__ import annotations
 
 import sys
 import threading
-import traceback
 import tkinter as tk
-from pathlib import Path
 
 # ── Patch 1: nametowidget ──────────────────────────────────────────────────
 _orig_nametowidget = tk.Misc.nametowidget
@@ -53,7 +51,6 @@ def _show_crash_dialog(exc_type, exc_value, exc_tb) -> None:
     Muestra un diálogo de error nativo cuando ocurre una excepción no capturada.
     Usa tkinter puro (sin CTK) para funcionar incluso si el launcher no arrancó.
     """
-    tb_text = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
     log_path = get_log_file()
     log_info = str(log_path) if log_path else "No disponible"
 
@@ -91,20 +88,46 @@ def _handle_exception(exc_type, exc_value, exc_tb) -> None:
     _show_crash_dialog(exc_type, exc_value, exc_tb)
 
 
+_app = None   # MainWindow activa (para avisar de errores en hilos)
+
+
 def _handle_thread_exception(args) -> None:
     """threading.excepthook — excepción no capturada en hilo secundario."""
     if args.exc_type is None or issubclass(args.exc_type, SystemExit):
         return
+    thread_name = args.thread.name if args.thread else "?"
     _log.critical(
-        f"Excepción no capturada en hilo '{args.thread.name}'",
+        f"Excepción no capturada en hilo '{thread_name}'",
         exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
     )
-    _show_crash_dialog(args.exc_type, args.exc_value, args.exc_traceback)
+    # Un error en un hilo de fondo no tumba el launcher: avisar en la consola
+    # de la app. NO crear un tk.Tk() desde este hilo (Tk no es thread-safe).
+    if _app is not None:
+        try:
+            _app.log(f"Error interno ({args.exc_type.__name__}: {args.exc_value}). "
+                     "Detalles en el archivo de log.", "error")
+        except Exception:
+            pass
 
 
-# Registrar ambos hooks globales
+def _handle_tk_callback_exception(self, exc_type, exc_value, exc_tb) -> None:
+    """
+    Tk.report_callback_exception — errores dentro de callbacks de botones,
+    after(), etc. Por defecto Tk los imprime en stderr, que en el EXE
+    (console=False) no existe: se perdían sin dejar rastro.
+    """
+    _log.error("Excepción en callback de Tk",
+               exc_info=(exc_type, exc_value, exc_tb))
+    try:
+        self.log(f"Error: {exc_type.__name__}: {exc_value}", "error")
+    except Exception:
+        pass
+
+
+# Registrar los hooks globales
 sys.excepthook          = _handle_exception
 threading.excepthook    = _handle_thread_exception   # Python 3.8+
+tk.Tk.report_callback_exception = _handle_tk_callback_exception
 
 # ──────────────────────────────────────────────────────────────────────────
 
@@ -112,9 +135,11 @@ from src.gui.main_window import MainWindow
 
 
 def main() -> None:
+    global _app
     _log.info("Iniciando ventana principal")
     try:
         app = MainWindow()
+        _app = app
         app.mainloop()
         _log.info("Launcher cerrado normalmente")
     except Exception:

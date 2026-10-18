@@ -3,7 +3,7 @@ from __future__ import annotations
 """Vista principal — gestión de perfiles de instancia."""
 
 import customtkinter as ctk
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Dict, TYPE_CHECKING
 
 from src.gui.components import COLORS, ProfileCard
 from src.utils import profiles
@@ -46,8 +46,8 @@ class HomeView(ctk.CTkFrame):
             text="  Nuevo" if _ic_plus else "+ Nuevo",
             width=100, height=36,
             font=ctk.CTkFont(size=13, weight="bold"),
-            fg_color=COLORS["accent"], hover_color=COLORS["accent_dim"],
-            text_color="#000000", corner_radius=8,
+            fg_color=COLORS["accent"], hover_color=COLORS["accent2"],
+            text_color="#ffffff", corner_radius=8,
             command=self._on_new_profile,
             **_plus_kw,
         ).pack(side="right")
@@ -122,13 +122,27 @@ class HomeView(ctk.CTkFrame):
     # ── Eliminar ──────────────────────────────────────────────────
 
     def _on_delete(self, profile_id: str) -> None:
+        name = next(
+            (p.get("name", profile_id) for p in self.app._profiles if p.get("id") == profile_id),
+            profile_id,
+        )
+        # Un clic accidental no debe borrar el perfil sin preguntar
+        from tkinter import messagebox
+        if not messagebox.askyesno(
+            "Eliminar perfil",
+            f"¿Eliminar el perfil «{name}»?\n\n"
+            "La carpeta de la instancia (mundos, mods, capturas) NO se borra.",
+            icon="warning",
+            parent=self.app,
+        ):
+            return
         try:
             profiles.delete(profile_id)
             if self.app._selected_profile_id == profile_id:
                 self.app._selected_profile_id = None
             self.refresh()
             self.app._update_bottom_bar_info()
-            self.app.log(f"Perfil eliminado: {profile_id}")
+            self.app.log(f"Perfil eliminado: {name}")
         except Exception as e:
             self.app.log(f"Error al eliminar perfil: {e}", "error")
 
@@ -136,7 +150,11 @@ class HomeView(ctk.CTkFrame):
 
     def _on_new_profile(self) -> None:
         if not self.app._all_versions:
-            self.app.log("Espera — cargando lista de versiones de Minecraft...", "warning")
+            if self.app._versions_state == "error":
+                self.app.log("Reintentando cargar la lista de versiones...", "warning")
+                self.app.fetch_versions_async()
+            else:
+                self.app.log("Espera — cargando lista de versiones de Minecraft...", "warning")
             return
         from src.gui.dialogs import NewProfileDialog
         NewProfileDialog(self.app, self.app._all_versions, self._on_profile_created)

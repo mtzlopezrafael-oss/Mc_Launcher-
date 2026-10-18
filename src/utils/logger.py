@@ -74,10 +74,16 @@ def setup_logging(version: str, log_dir: Path) -> Path:
     root.addHandler(file_handler)
 
     # ── Handler: consola (solo WARNING+, no molesta en terminal) ─────────
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.WARNING)
-    console_handler.setFormatter(fmt)
-    root.addHandler(console_handler)
+    # En el EXE de PyInstaller (console=False) sys.stdout es None.
+    if sys.stdout is not None:
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(logging.WARNING)
+        console_handler.setFormatter(fmt)
+        root.addHandler(console_handler)
+
+    # Librerías de red muy verbosas en DEBUG — no inundar el archivo de log
+    for noisy in ("urllib3", "PIL"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
 
     _initialized = True
 

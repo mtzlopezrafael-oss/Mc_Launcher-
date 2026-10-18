@@ -17,7 +17,7 @@ from src.utils.logger import get_logger as _get_logger
 _mw_log = _get_logger("launcher.gui")
 
 from src.gui.components import (
-    COLORS, LOADER_COLORS,
+    COLORS,
     AvatarWidget, PlayButton, ProgressBarWithLabel, NavButton,
 )
 from src.gui.views import HomeView, NewsView, LogView, SettingsView, InstanceDetailView
@@ -29,37 +29,22 @@ except ImportError:
     def _ico(name, size=(18, 18)):  # type: ignore[misc]
         return None
 
-# Auto-updater
-try:
-    from src.updater import (
-        check_for_updates, download_update, apply_update,
-        download_and_run_installer, UpdateInfo,
-    )
-    from src.utils.config import UPDATE_VERSION_URL
-    _UPDATER_AVAILABLE = True
-except ImportError:
-    _UPDATER_AVAILABLE = False
-    UPDATE_VERSION_URL = ""
+# Auto-updater (solo stdlib — no hace falta fallback)
+from src.updater import (
+    check_for_updates, download_update, apply_update,
+    download_and_run_installer, restart_launcher,
+)
 
-# Launcher back-end
-try:
-    from src.launcher.core import LauncherCore, LaunchSettings
-    from src.launcher.java_checker import ensure_java
-    from src.utils.config import MINECRAFT_DIR
-except ImportError:
-    # Stubs mínimos para desarrollo/testing
-    class LauncherCore:
-        def __init__(self, log_fn): self._log = log_fn
-        def fetch_versions(self): return []
-        def download_and_launch(self, *a, **kw): pass
-
-    class LaunchSettings:
-        def __init__(self, **kw): self.__dict__.update(kw)
-
-    def ensure_java():
-        return (True, "", "21.0.10", "Java found")
-
-    MINECRAFT_DIR = Path.home() / ".minecraft"
+# Launcher back-end. Sin stubs: si falta una dependencia (p. ej.
+# minecraft-launcher-lib) es mejor fallar al arrancar con un error claro que
+# mostrar un botón PLAY que no hace nada.
+from src.launcher.core import LauncherCore, LaunchSettings, classify_game_line
+from src.launcher.java_checker import ensure_java
+from src.utils.config import (
+    APP_HEIGHT, APP_WIDTH, CURRENT_THEME, LAUNCHER_VERSION, MINECRAFT_DIR,
+    SETTINGS_FILE, UPDATE_VERSION_URL,
+)
+from src.utils.jsonio import atomic_write_json
 
 
 class MainWindow(ctk.CTk):
@@ -68,9 +53,9 @@ class MainWindow(ctk.CTk):
     Layout: Sidebar (230px) | Content (flexible) | Bottom Bar (80px)
     """
 
-    APP_VERSION = "3.2.1"
-    WINDOW_WIDTH = 1100
-    WINDOW_HEIGHT = 680
+    APP_VERSION = LAUNCHER_VERSION
+    WINDOW_WIDTH = APP_WIDTH
+    WINDOW_HEIGHT = APP_HEIGHT
     SIDEBAR_WIDTH = 230
     BOTTOM_BAR_HEIGHT = 80
 
@@ -82,6 +67,12 @@ class MainWindow(ctk.CTk):
     ]
 
     def __init__(self):
+        # El modo de apariencia afecta a los colores por defecto de CTk
+        # (scrollbars, menús, barra de título en Windows): debe coincidir con
+        # el tema del launcher y fijarse antes de crear la ventana.
+        ctk.set_appearance_mode(CURRENT_THEME)
+        ctk.set_default_color_theme("dark-blue")
+
         super().__init__()
 
         # Configure window
@@ -92,10 +83,8 @@ class MainWindow(ctk.CTk):
         self.configure(fg_color=COLORS["bg"])
         self._is_fullscreen = False
 
-        ctk.set_appearance_mode("dark")
-        ctk.set_default_color_theme("dark-blue")
-
         # ── Shared state ──────────────────────────────────────────
+        self._settings: Dict = self._read_settings_file()
         self._current_section = "home"
         self._selected_profile_id: Optional[str] = self._load_setting("selected_profile_id", None)
         self._profiles: List[Dict] = []
@@ -104,6 +93,7 @@ class MainWindow(ctk.CTk):
         self._close_on_launch: bool = self._load_setting("close_on_launch", False)
         self._all_versions: List[str] = []      # IDs filtrados (lo que ven los diálogos)
         self._all_versions_raw: List[Dict] = [] # Todos los dicts crudos de la API
+        self._versions_state: str = "loading"   # loading | ok | error
         self._show_snapshots: bool = self._load_setting("show_snapshots", False)
         self._update_info: Optional[object] = None   # UpdateInfo si hay actualización disponible
         self.core = LauncherCore(self.log)
@@ -377,19 +367,34 @@ class MainWindow(ctk.CTk):
 
     def _load_initial_data(self):
         self._check_java_async()
-        threading.Thread(target=self._fetch_versions, daemon=True).start()
+        self.fetch_versions_async()
         self._home_view.refresh()
+        # El perfil guardado puede haber sido borrado entre sesiones
+        if self._selected_profile_id and self.get_selected_profile() is None:
+            self._selected_profile_id = None
+        # Mostrar el perfil restaurado en la barra inferior desde el arranque
+        self._update_bottom_bar_info()
         self._news_view.refresh()
 
+    def fetch_versions_async(self) -> None:
+        """(Re)carga la lista de versiones de Minecraft en segundo plano."""
+        self._versions_state = "loading"
+        threading.Thread(target=self._fetch_versions, daemon=True).start()
+
     def _fetch_versions(self):
-        try:
-            # FIX-064: reutilizar self.core en vez de crear otro LauncherCore
-            self._all_versions_raw = self.core.fetch_versions()
-            self._apply_version_filter()
-        except Exception as e:
-            self._all_versions_raw = []
-            self._all_versions = []
-            self.log(f"Error cargando versiones: {e}", "error")
+        # FIX-064: reutilizar self.core en vez de crear otro LauncherCore
+        raw = self.core.fetch_versions()
+        self._all_versions_raw = raw
+        self._apply_version_filter()
+        if raw:
+            self._versions_state = "ok"
+        else:
+            self._versions_state = "error"
+            self.log(
+                "No se pudo cargar la lista de versiones (¿sin conexión?). "
+                "Pulsa «Nuevo» para reintentar.",
+                "error",
+            )
 
     def _apply_version_filter(self) -> None:
         """Filtra _all_versions_raw según _show_snapshots y guarda los IDs."""
@@ -425,9 +430,10 @@ class MainWindow(ctk.CTk):
                 text_color=COLORS["success"],
             )
         else:
+            # No es bloqueante: Minecraft descarga su propio runtime de Java
             self._java_label.configure(
-                text="☕ Java no encontrado ✗",
-                text_color=COLORS["error"],
+                text="☕ Java de Mojang (automático)",
+                text_color=COLORS["text_dim"],
             )
 
     # =================================================================
@@ -463,9 +469,6 @@ class MainWindow(ctk.CTk):
 
     def _check_update_async(self) -> None:
         """Comprueba actualizaciones en un hilo de fondo."""
-        if not _UPDATER_AVAILABLE:
-            return
-
         def _check():
             try:
                 info = check_for_updates(self.APP_VERSION, UPDATE_VERSION_URL)
@@ -481,15 +484,17 @@ class MainWindow(ctk.CTk):
 
     def _on_update_found(self, info) -> None:
         """Muestra el banner de actualización en la sidebar."""
+        already_shown = self._update_info is not None
         self._update_info = info
         self._update_banner_label.configure(
             text=f"🆕 Versión {info.version} disponible\n{info.changelog[:80]}",
         )
         self._update_banner.pack(fill="x", padx=12, pady=(0, 8), before=self._java_status_frame)
-        self.log(
-            f"🆕 Actualización disponible: v{info.version} — ve a Ajustes para instalar",
-            "success",
-        )
+        if not already_shown:
+            self.log(
+                f"🆕 Actualización disponible: v{info.version} — pulsa «Instalar actualización»",
+                "success",
+            )
 
     def _on_install_update(self) -> None:
         """
@@ -500,7 +505,7 @@ class MainWindow(ctk.CTk):
           anterior e instala la nueva automáticamente.
         - Código fuente (desarrollo): descarga el ZIP del repo y copia los archivos.
         """
-        if not self._update_info or not _UPDATER_AVAILABLE:
+        if not self._update_info:
             return
 
         self._update_banner_btn.configure(text="Descargando...", state="disabled")
@@ -625,7 +630,6 @@ class MainWindow(ctk.CTk):
     def change_theme(self, theme: str) -> None:
         """Guarda el tema y reinicia el launcher para aplicarlo."""
         self._save_setting("theme", theme)
-        import os, sys
         self.log(f"Cambiando tema a '{theme}' — reiniciando...", "info")
         try:
             self.after(300, self._restart)
@@ -633,16 +637,8 @@ class MainWindow(ctk.CTk):
             self._restart()
 
     def _restart(self) -> None:
-        import os, sys
-        python = sys.executable
-        args   = [python] + sys.argv
         self.destroy()
-        if sys.platform == "win32":
-            import subprocess
-            subprocess.Popen(args)
-            sys.exit(0)
-        else:
-            os.execv(python, args)
+        restart_launcher()
 
     def set_show_snapshots(self, value: bool) -> None:
         """Llamado por SettingsView al cambiar el toggle de snapshots."""
@@ -654,33 +650,32 @@ class MainWindow(ctk.CTk):
 
     # ── Persistent settings helpers ───────────────────────────────
 
-    def _load_setting(self, key: str, default):
-        """Lee un valor de settings.json, devuelve default si no existe."""
+    @staticmethod
+    def _read_settings_file() -> Dict:
         import json as _json
         try:
-            from src.utils.config import SETTINGS_FILE
             with open(SETTINGS_FILE, encoding="utf-8") as f:
-                return _json.load(f).get(key, default)
-        except Exception:
-            return default
+                data = _json.load(f)
+            return data if isinstance(data, dict) else {}
+        except FileNotFoundError:
+            return {}
+        except Exception as exc:
+            _mw_log.warning("settings.json ilegible, se usan valores por defecto: %s", exc)
+            return {}
+
+    def _load_setting(self, key: str, default):
+        """Lee un valor de settings.json (cacheado al arrancar)."""
+        return self._settings.get(key, default)
 
     def _save_setting(self, key: str, value) -> None:
         """Guarda un valor en settings.json sin borrar las otras claves."""
-        import json as _json
+        if self._settings.get(key, object()) == value:
+            return  # sin cambios — evita escribir a disco en cada clic
+        self._settings[key] = value
         try:
-            from src.utils.config import LAUNCHER_DIR, SETTINGS_FILE
-            LAUNCHER_DIR.mkdir(parents=True, exist_ok=True)
-            data: dict = {}
-            try:
-                with open(SETTINGS_FILE, encoding="utf-8") as f:
-                    data = _json.load(f)
-            except Exception:
-                pass
-            data[key] = value
-            with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-                _json.dump(data, f, indent=2)
-        except Exception:
-            pass
+            atomic_write_json(SETTINGS_FILE, self._settings)
+        except Exception as exc:
+            _mw_log.error("No se pudo guardar settings.json: %s", exc)
 
     # =================================================================
     #  PLAY / LAUNCH
@@ -695,10 +690,8 @@ class MainWindow(ctk.CTk):
             self.log("Selecciona un perfil para jugar", "warning")
             return
 
-        if not self._java_status["found"]:
-            self.log("Java no está instalado", "error")
-            return
-
+        # Sin Java del sistema no se bloquea: LauncherCore usa el runtime de
+        # Java que Mojang descarga para cada versión.
         self._is_launching = True
         self._play_button.set_launching(True)
 
@@ -725,6 +718,11 @@ class MainWindow(ctk.CTk):
 
             from src.utils import profiles as _prof
             _prof.touch_last_played(profile.get("id"))
+            try:
+                # Refrescar "Último: ..." en la tarjeta del perfil
+                self.after(0, self._home_view.refresh)
+            except Exception:
+                pass
             self.log("Juego iniciado", "success")
 
             # Leer stdout/stderr del proceso y enviarlo al log del launcher
@@ -785,29 +783,20 @@ class MainWindow(ctk.CTk):
         self._launch_progress.pack_forget()
         self.log(f"Error al iniciar: {message}", "error")
 
-    def _read_game_output(self, process: "subprocess.Popen") -> None:
+    def _read_game_output(self, process) -> None:
         """Lee stdout/stderr del proceso de Minecraft y lo envía al LogView."""
-        import subprocess as _sp
-
         def _reader():
             try:
                 for raw_line in process.stdout:
-                    if not self.winfo_exists():
-                        break
+                    # No se llama a winfo_exists() aquí: Tk no es thread-safe.
+                    # Si la ventana ya no existe, after() lanza y salimos.
                     try:
                         line = raw_line.decode("utf-8", errors="replace").rstrip()
                     except Exception:
                         line = str(raw_line).rstrip()
                     if not line:
                         continue
-                    # Detectar nivel por contenido de la línea
-                    lower = line.lower()
-                    if "error" in lower or "exception" in lower or "fatal" in lower:
-                        lvl = "error"
-                    elif "warn" in lower:
-                        lvl = "warning"
-                    else:
-                        lvl = "info"
+                    lvl = classify_game_line(line)
                     try:
                         self.after(0, lambda m=line, l=lvl: self.log(f"[MC] {m}", l))
                     except Exception:

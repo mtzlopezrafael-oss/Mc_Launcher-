@@ -23,9 +23,13 @@ import sys
 import tempfile
 import urllib.request
 import zipfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
+
+import logging
+
+_log = logging.getLogger("launcher.updater")
 
 
 # ── Utilidades de versión ──────────────────────────────────────────────────────
@@ -40,7 +44,10 @@ def _parse_version(v: str) -> tuple:
 
 def is_newer(remote: str, current: str) -> bool:
     """Retorna True si la versión remota es mayor que la actual."""
-    return _parse_version(remote) > _parse_version(current)
+    r, c = _parse_version(remote), _parse_version(current)
+    # Igualar longitudes: "3.2" y "3.2.0" son la misma versión
+    width = max(len(r), len(c))
+    return r + (0,) * (width - len(r)) > c + (0,) * (width - len(c))
 
 
 # ── Datos de actualización ─────────────────────────────────────────────────────
@@ -87,7 +94,8 @@ def check_for_updates(
             download_url=data.get("download_url", ""),
             changelog=data.get("changelog", ""),
         )
-    except Exception:
+    except Exception as exc:
+        _log.warning("No se pudo comprobar actualizaciones: %s", exc)
         return None
 
 
@@ -127,6 +135,7 @@ def download_update(
 
         return zip_path
     except Exception:
+        _log.exception("Error descargando la actualización")
         return None
 
 
@@ -179,6 +188,7 @@ def apply_update(
         return True
 
     except Exception:
+        _log.exception("Error aplicando la actualización")
         return False
 
 
@@ -282,8 +292,8 @@ def download_and_run_installer(
         subprocess.Popen([tmp_path], shell=False)
         return True
 
-    except Exception as exc:
-        log.exception("Error descargando/ejecutando instalador: %s", exc)
+    except Exception:
+        log.exception("Error descargando/ejecutando instalador")
         return False
 
 
@@ -293,7 +303,12 @@ def restart_launcher() -> None:
     """Reemplaza el proceso actual con una nueva instancia del launcher."""
     import os
     python = sys.executable
-    args = [python] + sys.argv
+    if getattr(sys, "frozen", False):
+        # EXE de PyInstaller: sys.argv[0] ya es el propio EXE; repetirlo lo
+        # pasaría como argumento a la nueva instancia.
+        args = [python] + sys.argv[1:]
+    else:
+        args = [python] + sys.argv
     if sys.platform == "win32":
         import subprocess
         subprocess.Popen(args)

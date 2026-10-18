@@ -182,9 +182,8 @@ class SettingsView(ctk.CTkFrame):
         diag_card.pack(fill="x", pady=(0, 16))
 
         # Ruta del log actual
-        from src.utils.logger import get_log_file, get_log_dir
+        from src.utils.logger import get_log_file
         _log_file = get_log_file()
-        _log_dir  = get_log_dir()
         _log_path_text = str(_log_file) if _log_file else "No disponible"
 
         self._diag_path_label = ctk.CTkLabel(
@@ -261,7 +260,6 @@ class SettingsView(ctk.CTkFrame):
         """Busca actualizaciones manualmente desde Ajustes."""
         self._check_update_btn.configure(text="Buscando...", state="disabled")
 
-        import threading
         from src.updater import check_for_updates
         from src.utils.config import UPDATE_VERSION_URL
 

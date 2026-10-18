@@ -3,8 +3,7 @@ from __future__ import annotations
 """Diálogos modales — NewProfileDialog."""
 
 import threading
-from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List
 
 import customtkinter as ctk
 
