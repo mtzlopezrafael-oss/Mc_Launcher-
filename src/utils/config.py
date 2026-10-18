@@ -10,14 +10,33 @@ from typing import Dict, List, Optional
 MINECRAFT_DIR: Path  = Path.home() / ".minecraft"
 LAUNCHER_DIR:  Path  = Path.home() / ".ctk-mc-launcher"
 INSTANCES_DIR: Path  = LAUNCHER_DIR / "instances"
-HISTORY_FILE:  Path  = LAUNCHER_DIR / "history.json"
 SETTINGS_FILE: Path  = LAUNCHER_DIR / "settings.json"
 PROFILES_FILE: Path  = LAUNCHER_DIR / "profiles.json"
 LOG_DIR:       Path  = LAUNCHER_DIR / "logs"
 
 # ── Metadata ───────────────────────────────────────────────────────────────
 LAUNCHER_NAME:    str = "CustomTK Minecraft Launcher"
-LAUNCHER_VERSION: str = "3.2.1"   # Actualizar aquí y en version.json al publicar
+_FALLBACK_VERSION: str = "3.2.1"
+
+
+def _read_launcher_version() -> str:
+    """
+    Lee la versión desde version.json — única fuente de verdad (la usa también
+    la pipeline de release). En el EXE de PyInstaller el archivo está en
+    sys._MEIPASS; en modo fuente, en la raíz del proyecto.
+    """
+    import json as _j
+    import sys as _s
+    base = Path(getattr(_s, "_MEIPASS", Path(__file__).resolve().parents[2]))
+    try:
+        with open(base / "version.json", encoding="utf-8") as _f:
+            return str(_j.load(_f).get("version") or _FALLBACK_VERSION)
+    except Exception:
+        return _FALLBACK_VERSION
+
+
+LAUNCHER_VERSION: str = _read_launcher_version()
+USER_AGENT:       str = f"CustomTK-Minecraft-Launcher/{LAUNCHER_VERSION}"
 
 # ── Window ─────────────────────────────────────────────────────────────────
 APP_WIDTH:       int = 1100
@@ -127,12 +146,10 @@ CURSEFORGE_LOADER_MAP: Dict[str, int] = {
 RAM_OPTIONS_MB: List[int] = [512, 1024, 2048, 4096, 8192, 16384]
 DEFAULT_RAM_MB: int        = 2048
 VERSION_TYPES:  List[str]  = ["release", "snapshot"]
-HISTORY_MAX:    int        = 15
 LOG_LINE_LIMIT: int        = 800
 
 # ── External APIs ──────────────────────────────────────────────────────────
 NEWS_URL:        str = "https://launchercontent.mojang.com/v2/javaPatchNotes.json"
-AVATAR_URL:      str = "https://minotar.net/avatar/{username}/80"
 MODRINTH_API:    str = "https://api.modrinth.com/v2"
 CURSEFORGE_API:  str = "https://api.curseforge.com/v1"
 
