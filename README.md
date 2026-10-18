@@ -1,44 +1,54 @@
-# CustomTk Minecraft Launcher
+# MC Launcher
 
-Launcher de escritorio en Python con interfaz moderna para descargar y ejecutar Minecraft en modo offline usando `minecraft-launcher-lib`.
+Launcher de Minecraft (Java Edition, modo offline) escrito en Python con `customtkinter`, inspirado en Prism Launcher: cada perfil es una instancia independiente con su propia carpeta de mods y mundos.
 
 ## Características
-- Tema oscuro estilo gaming en `customtkinter`.
-- Login offline con nombre de usuario.
-- Selector de versión oficial (release/snapshot).
-- Selector rápido de RAM (512 MB a 8 GB).
-- Barra de progreso y consola de log embebida.
-- Detección automática de Java (muestra advertencia si falta).
-- Descarga y lanzamiento en hilo separado para no congelar la UI.
+- **Perfiles/instancias** con versión de Minecraft, loader (Fabric, Forge, NeoForge), RAM, usuario y carpeta propios.
+- **Mods** desde Modrinth y CurseForge: búsqueda, instalación, activar/desactivar y eliminar por instancia.
+- **Modpacks** (`.mrpack` de Modrinth y `.zip` de CurseForge): descarga en paralelo, verificación SHA-1 y ajuste automático del perfil a la versión de Minecraft/loader que pide el modpack.
+- **Java automático**: usa el runtime de Java que Mojang publica para cada versión (8, 17 o 21 según corresponda). No hace falta tener Java instalado; si lo tienes, se usa como respaldo.
+- Consola integrada con la salida del juego coloreada por nivel.
+- Noticias de Minecraft, temas claro/oscuro y auto-actualización desde GitHub Releases.
+- Logs de diagnóstico rotativos en `~/.ctk-mc-launcher/logs/`.
 
-## Requisitos del sistema
-- Python 3.10 o superior.
-- Java 17+ instalado y en PATH o configurado en `JAVA_HOME`.
-- Conexión a internet para descargar versiones de Minecraft.
-- SO compatible: Windows, macOS y Linux.
+## Requisitos
+- Windows 10/11 (instalador `.exe` en [Releases](https://github.com/mtzlopezrafael-oss/Mc_Launcher-/releases)), o Python 3.10+ en Windows, macOS o Linux para ejecutar desde el código.
+- Conexión a internet para descargar versiones, mods y el runtime de Java.
 
-## Instalación
-1) Clonar o copiar este directorio `minecraft-launcher`.
-2) Crear entorno virtual:
-   - Windows (PowerShell): `python -m venv .venv; .\\.venv\\Scripts\\activate`
-   - macOS/Linux: `python -m venv .venv && source .venv/bin/activate`
-3) Instalar dependencias: `pip install -r requirements.txt`
+## Ejecutar desde el código
+```bash
+python -m venv .venv
+# Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+python main.py
+```
+En Linux puede hacer falta instalar Tk: `sudo apt install python3-tk`.
 
-## Uso
-1) Activa el entorno virtual si no lo está.
-2) Ejecuta el launcher: `python main.py`
-3) En la ventana:
-   - Ingresa un nombre de usuario (offline).
-   - Elige la versión de Minecraft.
-   - Ajusta la RAM.
-   - Presiona **PLAY**. La descarga se mostrará en la barra y el log.
+## Tests
+```bash
+python -m unittest discover -s tests -t . -v
+```
+El workflow `CI` ejecuta `pyflakes` y estos tests en cada push y pull request.
 
-## Capturas (descripción)
-- **Pantalla principal:** fondo oscuro, campos de Usuario, Versión y RAM en la parte superior, botón PLAY destacado, barra de progreso debajo y consola de log en la parte inferior.
-- **Advertencia Java:** mensaje en la esquina derecha si Java no está disponible.
+## Publicar una versión
+1. Cambia `"version"` en `version.json` (es la única fuente de la versión; el launcher la lee al arrancar).
+2. Crea y sube el tag: `git tag v3.3.0 && git push origin v3.3.0`.
+3. El workflow *Build & Release* compila el EXE con PyInstaller, genera el instalador con Inno Setup y crea el Release.
 
-## Troubleshooting
-- **Java no encontrado:** Instala JDK 17+ y reinicia. Asegúrate de que `java -version` funcione en la terminal.
-- **Descarga lenta o fallida:** verifica la conexión y vuelve a intentar; la librería reanuda descargas parciales.
-- **Errores de permisos en macOS/Linux:** ejecuta desde una ruta donde tu usuario tenga permisos de escritura; el directorio de datos es `~/.minecraft`.
-- **La ventana se queda congelada:** asegúrate de no cerrar la terminal mientras corre; la descarga y el juego se ejecutan en hilos separados.
+## Estructura
+```
+main.py                 Punto de entrada: parches de Tk, logging y manejo de errores
+src/gui/                Ventana principal, componentes, diálogos y vistas
+src/launcher/           Instalación y lanzamiento (core), loaders, Java, mods y modpacks
+src/utils/              Configuración, perfiles, logging, red y E/S de JSON
+src/updater.py          Auto-actualización
+tests/                  Tests unitarios (sin interfaz gráfica)
+```
+
+## Datos del usuario
+Todo se guarda en `~/.ctk-mc-launcher/`: `profiles.json`, `settings.json`, `instances/` y `logs/`. Los JSON se escriben de forma atómica; si `profiles.json` se corrompe, se guarda una copia `profiles.json.corrupt-<fecha>` antes de sobrescribirlo.
+
+## Problemas frecuentes
+- **El juego no arranca:** revisa la pestaña *Log* y, si hace falta, *Ajustes → Diagnósticos → Copiar log*.
+- **Un modpack no carga:** si algún mod no se pudo descargar, el launcher lo indica; vuelve a instalar el modpack para reintentar.
+- **Sin conexión:** la lista de versiones no carga; pulsa *Nuevo* para reintentar cuando vuelva la conexión.

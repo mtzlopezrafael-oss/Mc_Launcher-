@@ -13,6 +13,7 @@ La carpeta dist/MC_Launcher/ es lo que empaqueta el instalador WiX.
 
 from pathlib import Path
 import customtkinter
+from PyInstaller.utils.hooks import collect_submodules
 
 block_cipher = None
 
@@ -33,10 +34,9 @@ a = Analysis(
         'PIL._tkinter_finder',
         'PIL.Image',
         'PIL.ImageTk',
-        'minecraft_launcher_lib',
-        'minecraft_launcher_lib.install',
-        'minecraft_launcher_lib.command',
-        'minecraft_launcher_lib.utils',
+        # Todos los submódulos (mod_loader, runtime, forge, fabric, quilt…):
+        # algunos se importan de forma perezosa y PyInstaller no los ve.
+        *collect_submodules('minecraft_launcher_lib'),
         'requests',
         'certifi',
         'charset_normalizer',
